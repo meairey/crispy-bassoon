@@ -165,7 +165,10 @@ df= data.frame(ID1 = c(1:1100)) %>%
 
 # Apply reordering
 df_ordered <- reorder_points(df)
-## Fixing site lengths with site boundaries for that one weird continuous stretch
+
+
+## Write a csv with the ordered points for a shape file
+write.csv(df_ordered, "Data/FBL_shape.csv")
 
 # Plot with geom_path
 ggplot(df_ordered, aes(x = lat1, y = lon1)) +
@@ -314,6 +317,8 @@ df= data.frame(ID1 = c(1:1000)) %>%
 # Apply reordering
 df_ordered <- reorder_points(df)
 
+# Write csv for LML shape
+write.csv(df_ordered, "Data/LML.shape.csv")
 
 site_lengths = site_lengths %>% na.omit()
 
