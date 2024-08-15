@@ -1,10 +1,19 @@
+# Libraries --
+library(tidyverse)
+library(gridExtra)
+
+## LML ------
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
   column_to_rownames(var = "X")
 
 
-env_updated.lml = read.csv("Data/LML_habitat.csv")
+env_updated.lml = read.csv("Data/LML_habitat.csv")  %>%
+  select(X, SITE_N, B, C, EV, FW, G, S, SV, O, BED, CW, everything())#  %>%
+  #mutate(across(c(-SITE_N, -X), ~ ifelse(. < 2, 0, 1))) ## Makes this just a presence absence of any habitat feature that is more than 20% of the shoreline
 
-v = LML.CPUE.w.sec  %>%
+
+
+v.lml = LML.CPUE.w.sec  %>%
   mutate(y_s = rownames(LML.CPUE.w.sec)) %>%
   pivot_longer(1:WS_2,
                names_to = "Species") %>%
@@ -25,10 +34,10 @@ v = LML.CPUE.w.sec  %>%
 ### Trying to include some of the actual data
 
 
-data = v 
+data.lml = v.lml 
 
 
-data_com = data %>% 
+data_com.lml = data.lml %>% 
   #select(veg_emerg:wood_fine, CC_1, CC_2) %>%
   filter(CC_1 + CC_2 +
            CS_1 + CS_2 +
@@ -42,17 +51,17 @@ data_com = data %>%
 
 
 
-data_env = data_com %>%
+data_env.lml = data_com.lml %>%
   ungroup() %>%
   select(SMB_1, SMB_2, SITE_N, 
          Year, 
-         FW, O, SC,
+         FW, O,
          SV,B,S,EV, CW, BED, C) %>%
   mutate(Year = as.numeric(Year)) %>%
   ungroup()
 
 
-data_com = data_com %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_1, MM_2,
+data_com.lml = data_com.lml %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_1, MM_2,
                                              WS_1, WS_2,
                                              PS_1, PS_2)
 
@@ -62,45 +71,43 @@ data_com = data_com %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_1, MM_2,
 ## Maybe slope gradient of the shoreline? Proximity to deep water
 ## Depth, proximity to tribs? Or known groundwater seeps?
 ## Proximity to camps?
-cca_model = cca(data_com ~ 
-                  data_env$SMB_2 + 
-                  data_env$SMB_1 +
-                  data_env$Year +
-                  data_env$CW +
-                  data_env$BED +
+cca_model.lml = cca(data_com.lml ~ 
+                  SMB_2 + 
+                  SMB_1 +
+                  Year +
+                  B +
+                  BED +
+                  C +
+                  CW +
+                  EV +
+                  FW + 
+                  O +
+                  #S +
+                  SV,
+                data = data_env.lml)
+print(cca_model.lml)
+#summary(cca_model.lml)
 
-                  data_env$SC +
-                  data_env$S +
-                  data_env$O +
-                  data_env$SV + 
-                  data_env$B +
-                  data_env$FW,
-                data = data_env)
-
-summary(cca_model)
-print(cca_model)
 
 
 # Extract species scores
-species_scores <- scores(cca_model, display = "species")
+species_scores.lml <- scores(cca_model.lml, display = "species")
 # Extract site scores
-site_scores <- scores(cca_model, display = "sites")
+site_scores.lml <- scores(cca_model.lml, display = "sites")
+
 # cca_mo
-vectors = summary(cca_model)[4]$biplot %>% as.data.frame() %>% 
-  mutate(ID = rownames(.)) %>%
-  separate(ID,  into = c("d", "env", "ID"))
-vectors$ID[1] = "SMB_2"
-vectors$ID[2] = "SMB_1"
+vectors.lml = summary(cca_model.lml)[4]$biplot %>% as.data.frame() %>% 
+  mutate(ID = rownames(.)) 
 
 # Plot the biplot
-ggplot() +
+LML.biplot = ggplot() +
   theme_minimal() + 
-  geom_hline(, yintercept = 0, linetype = "dashed", color = "gray") +
-  geom_vline(, xintercept = 0, linetype = "dashed", color = "gray") +
-  geom_text(data = species_scores, aes(label = rownames(species_scores), 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
+  geom_text(data = species_scores.lml, aes(label = rownames(species_scores.lml), 
                                        x = CCA1, y = CCA2), size = 5) +
-  geom_text(data = vectors, aes(label = ID, x = CCA1, y = CCA2), col = "brown") + 
-  geom_segment(data = vectors, aes(x = 0, y = 0, xend = CCA1, yend = CCA2),
+  geom_text(data = vectors.lml, aes(label = ID, x = CCA1, y = CCA2), col = "brown") + 
+  geom_segment(data = vectors.lml, aes(x = 0, y = 0, xend = CCA1, yend = CCA2),
                col = "brown", alpha = 0.5, arrow = arrow(length = unit(0.1, "inches"))) + 
   theme_minimal(base_size = 15) +
   theme(legend.position = "none") + 
@@ -113,8 +120,10 @@ ggplot() +
 
 FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
   column_to_rownames(var = "X")
-env_updated.fbl = read.csv("Data/FBL_habitat.csv")
-v = FBL.CPUE.w.sec %>% 
+env_updated.fbl = read.csv("Data/FBL_habitat.csv") %>%
+  select(X, SITE_N, B, C, EV, FW, G, S, SV, O, BED, CW, everything()) #%>%
+  #mutate(across(c(-SITE_N, -X), ~ ifelse(. < 2, 0, 1)))
+v.fbl = FBL.CPUE.w.sec %>% 
   mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
   pivot_longer(1:WS_2,
                names_to = "Species") %>%
@@ -135,7 +144,7 @@ v = FBL.CPUE.w.sec %>%
 
 
 ## Load in data from CPUE_hab.Rmd file
-data = v %>% ## Used for changepoints graph
+data.fbl = v.fbl %>% ## Used for changepoints graph
   filter(Year > 2004) %>% ## Filter for after the start of ther emoval
   mutate(value = value ) %>% ## not sure?
   left_join(env_updated.fbl) %>% ## Pull in this table from maps.R where we calculate percent shoreline of all different habitat features
@@ -147,13 +156,13 @@ data = v %>% ## Used for changepoints graph
   ungroup()
 
 # Create community dataframe where all target taxa (here the CC, WS, and MM) all have populations above 0
-data_com = data %>% 
+data_com.fbl = data.fbl %>% 
   filter(CC_1 + CC_2 +
            WS_1 + WS_2 +
            MM_1 + MM_2 > 0) 
 
 # Create environmental data frame that matches the data_com but contains only the habitat features
-data_env = data_com %>%
+data_env.fbl = data_com.fbl %>%
   select(Year, SMB_1,
          SMB_2, SITE_N,
          C, O, FW, B, 
@@ -162,63 +171,61 @@ data_env = data_com %>%
   ungroup()
 
 ## Now remove all other specieis that we're not interested in to get the community data frame
-data_com = data_com %>% ungroup() %>% select(CC_1, CC_2, 
+data_com.fbl = data_com.fbl %>% ungroup() %>% select(CC_1, CC_2, 
                                              MM_1, MM_2,
                                              WS_1, WS_2)
 
 ## Maybe slope gradient of the shoreline? Proximity to deep water
 ## Depth, proximity to tribs? Or known groundwater seeps?
 ## Proximity to camps?
-cca_model = cca(data_com ~ 
-                  #data_env$assigned_sand +
-                  data_env$Year + 
-                  data_env$SMB_2 + 
-                  data_env$SMB_1 +
-                  data_env$C +
-                  data_env$O + 
-                  data_env$SV +
-                  data_env$EV +
-                  data_env$BED +
-                  data_env$FW +
-                  data_env$CW,
-                data = data_env)
+cca_model.fbl = cca(data_com.fbl ~ 
+                  Year +
+                  SMB_2 + 
+                  SMB_1 +
+                  B +
+                  BED +
+                  C +
+                  CW +
+                  EV +
+                  FW + 
+                  O +
+                  #S +
+                  SV,
+                data = data_env.fbl)
 
 
-summary(cca_model)
-print(cca_model)
+#summary(cca_model.fbl)
+print(cca_model.fbl)
 
-cca_result <- cca_model
+cca_result.fbl <- cca_model.fbl
 
 # Extract species scores
-species_scores <- scores(cca_result, display = "species")
+species_scores.fbl <- scores(cca_result.fbl, display = "species")
 
 # Extract site scores
-site_scores <- scores(cca_result, display = "sites")
+site_scores.fbl <- scores(cca_result.fbl, display = "sites")
 
 # cca_mo
 
-vectors = summary(cca_model)[4]$biplot %>% as.data.frame() %>% 
-  mutate(ID = rownames(.)) %>%
-  separate(ID,  into = c("d", "env", "ID"))
-
-vectors$ID[2] = "SMB_2"; vectors$ID[3] = "SMB_1"
+vectors.fbl = summary(cca_model.fbl)[4]$biplot %>% as.data.frame() %>% 
+  mutate(ID = rownames(.)) 
 
 
 # Plot the biplot
-ggplot() +
+FBL.biplot = ggplot() +
   theme_minimal() + 
-  geom_hline(, yintercept = 0, linetype = "dashed", color = "gray") +
-  geom_vline(, xintercept = 0, linetype = "dashed", color = "gray") +
-  geom_text(data = species_scores,
-            aes(label = rownames(species_scores),
+  geom_hline( yintercept = 0, linetype = "dashed", color = "gray") +
+  geom_vline( xintercept = 0, linetype = "dashed", color = "gray") +
+  geom_text(data = species_scores.fbl,
+            aes(label = rownames(species_scores.fbl),
                 x = CCA1, y = CCA2),
             size = 5) +
-  geom_text(data = vectors, 
+  geom_text(data = vectors.fbl, 
             aes(label = ID, 
                 x = CCA1,
                 y = CCA2),
             col = "brown") + 
-  geom_segment(data = vectors,
+  geom_segment(data = vectors.fbl,
                aes(x = 0,
                    y = 0,
                    xend = CCA1,
@@ -231,3 +238,6 @@ ggplot() +
   xlim(-1.2, 1.5)
 
 
+## Plotting the two together ----------------
+
+grid.arrange(FBL.biplot, LML.biplot, ncol = 2)

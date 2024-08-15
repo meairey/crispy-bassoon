@@ -86,7 +86,12 @@ substrate = read.csv("Data/habitat_class1.csv") %>%
   mutate(feature = str_replace(feature, "SBR","B")) %>%
   mutate(feature = str_replace(feature, "SCS", "SC")) %>%
   mutate(feature = str_replace(feature, "SB", "B")) %>%
-  mutate(feature = str_replace(feature, "SCD", "SC"))
+  mutate(feature = str_replace(feature, "SCD", "SC"))  %>%
+  mutate(feature = str_replace(feature, "GRSVVEL", "G")) %>%
+  mutate(feature = str_replace(feature, "SC", "C")) %>%
+  mutate(feature = str_replace(feature, "GRSVVEL", "G")) %>%
+  mutate(feature = str_replace(feature, "SW", "SV")) %>%
+  mutate(feature = str_replace(feature, "SE", "SV"))
 
 ## Now join the distances with the substrate assignments to calculate total habitat lengths
 whole = substrate %>%
@@ -260,7 +265,17 @@ setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
 # Pull together df with substrate information and waypoints
 substrate = read.csv("Data/habitat_class1.csv") %>% 
   filter(water == "LML") %>%
-  filter(is.na(start) == F)
+  filter(is.na(start) == F)  %>%
+  mutate(feature = str_replace(feature, "A", "SV")) %>%
+  mutate(feature = str_replace(feature, "SBR","B")) %>%
+  mutate(feature = str_replace(feature, "SCS", "SC")) %>%
+  mutate(feature = str_replace(feature, "SB", "B")) %>%
+  mutate(feature = str_replace(feature, "SCD", "SC"))%>%
+  mutate(feature = str_replace(feature, "SC", "C")) %>%
+  mutate(feature = str_replace(feature, "GRSVVEL", "G")) %>%
+  mutate(feature = str_replace(feature, "SW", "SV")) %>%
+  mutate(feature = str_replace(feature, "SE", "SV"))
+
 # get the start and end points for each site
 site_lengths = substrate %>% group_by(water, site) %>%
   mutate(end = as.numeric(end)) %>% 
@@ -332,7 +347,8 @@ whole_lml = whole %>%
   separate(site, into = c("gear","site_num"), remove = F)
 
 whole_lml  %>%
-  mutate(site_num = parse_number(site)*1000)  %>%
+  separate(site, into = c("gear", "wate", "site")) %>%
+  mutate(site_num = parse_number(site))  %>%
   ggplot(aes(x = site_num, y = percent_shoreline, fill =  feature)) + 
   geom_bar(stat = "identity") + 
   facet_wrap(~feature) 
@@ -340,7 +356,9 @@ whole_lml  %>%
 ## Plotting Little Moose
 ggplot() +
   geom_path(data = df_ordered, aes(x = lat1, y = lon1)) +
-  geom_path(data = df_ordered %>% filter(ID1 <= 404 & ID1 >=382),  aes(x = lat1, y = lon1), col = "red") +
+  geom_path(data = df_ordered %>% filter(ID1 <= 404 & ID1 >=382), 
+            aes(x = lat1, y = lon1),
+            col = "red") +
   scale_x_reverse()
 
 
