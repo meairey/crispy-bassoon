@@ -2,17 +2,21 @@
 
 #### These are the changepoint analyses of all habitats and species 
 
-```{r, echo = F, warning=F, message= F, results = F}
 ## Habitat changepoints ------------------
+
+LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
+  column_to_rownames(var = "X")
 species_names = c("brown bullhead", "creek chub", "common shiner", "lake trout", "central mudminnow", "pumpkinseed", "rainbow smelt", "round whitefish", "smallmouth bass", "slimy sculpin","white sucker")
 vec = vector()
 p.val = vector()
 species = colnames(LML.CPUE.w.sec)
 
 change_points_list = list()
-v = LML.CPUE.w.sec %>% 
+
+
+v = LML.CPUE.w.sec  %>%
   mutate(y_s = rownames(LML.CPUE.w.sec)) %>%
-  pivot_longer(1:length(species),
+  pivot_longer(1:WS_2,
                names_to = "Species") %>%
   separate(y_s, 
            into = c("Year", "SITE_N"), sep = "_") %>%
@@ -158,8 +162,8 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
 
 
 
-## change colors 
-cp_lines = read.csv("MA2276_Code/Data/hab_cp.csv") %>% filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% filter(WATER == "LML")
+## Final Figure
+cp_lines = read.csv("Data/hab_cp.csv") %>% filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% filter(WATER == "LML")
 
 LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
   separate(ID, into = c("YEAR", "SITE_N"), sep = "_") %>%
@@ -224,15 +228,42 @@ LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
                      )) 
 
 
+
 ## FBL --------
+FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
+  column_to_rownames(var = "X")
+vec = vector()
+p.val = vector()
+species = colnames(FBL.CPUE.w.sec)
+
+
+
+change_points_list = list()
+v = FBL.CPUE.w.sec %>% 
+  mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
+  pivot_longer(1:length(species),
+               names_to = "Species") %>%
+  separate(y_s, 
+           into = c("Year", "SITE_N"), sep = "_") %>%
+  left_join(habs) %>%
+  unite("ID", 
+        c(SITE_N,Species), 
+        sep = "_", 
+        remove = F) %>%
+  # select(-SITE_N) %>%
+  rename(HAB_1 = Habitat) %>%
+  mutate(value = value * 60 * 60 ) %>%
+  filter(Year != 2002)# %>%
+# filter(Year > 2000) 
+summary_graph_data = list()
 
 v = v %>% 
   mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
   mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
 
-sandy.98 = c(2,4,5,12,13,11)
-rocky.98 = c(1,3,7,8,9,10)
+#sandy.98 = c(2,4,5,12,13,11)
+#rocky.98 = c(1,3,7,8,9,10)
 
 sandy.99 = c(1,4,5)
 rocky.99= c(3,2)
@@ -244,6 +275,7 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
   for(h in c("S","SW","RW")){
     # Set up data frame
     x = v %>%
+      select(-X) %>%
       #filter(Year > 1999) %>%
       #rename(HAB_1 = Habitat) %>%
       filter(Species == species[i], HAB_1 == h) %>%
@@ -328,7 +360,9 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
   
 }
 
-cp_lines = read.csv("MA2276_Code/Data/hab_cp.csv") %>% 
+
+## Final Plots ----------------------
+cp_lines = read.csv("Data/hab_cp.csv") %>% 
   filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% 
   filter(WATER == "FBL") 
 
@@ -380,13 +414,7 @@ FBL.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
                      )) 
 
 
-ggplot() +
-  geom_jitter(aes(y = SP, x = (YEAR), col = Habitat, shape = as.factor(AGE)),size = 4,data = cp_lines,height = .9, width = 0) + 
-  xlim(2001, 2023) +
-  theme_minimal() +
-  geom_hline(data = cp_lines %>% filter(is.na(YEAR)==T),
-             aes(yintercept = (SP), col = Habitat,
-                 after_scale = SP - 0.5))
+
 
 
 

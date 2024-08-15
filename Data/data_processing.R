@@ -300,12 +300,13 @@ BEF_data = BEF_data_unfiltered %>%
   mutate(SITE = SITE_N)
 
 # Data setup
-CPUE.w.sec = ((CPUE_wide_seconds(BEF_data) %>%
+CPUE.w.sec = CPUE_wide_seconds(BEF_data) %>%
                  unite("Group", c(YEAR, SITE)) %>% 
                  column_to_rownames(., var = "Group") %>% 
                  mutate(sumrow = rowSums(.)) %>%
                  filter(sumrow>0) %>%
-                 select(-sumrow))) 
+                 select(-sumrow) %>%
+                 rownames_to_column(var = "rownames")
 
 CPUE.w.sec
 
