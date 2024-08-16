@@ -81,7 +81,7 @@ distance_pairs = points %>%
 substrate = read.csv("Data/habitat_class1.csv") %>% 
   filter(is.na(start) == F) %>%
   filter(MEA == "MEA") %>%
-  filter(density > 2) %>%
+  #filter(density > 2) %>%
   mutate(feature = str_replace(feature, "A", "SV")) %>%
   mutate(feature = str_replace(feature, "SBR","B")) %>%
   mutate(feature = str_replace(feature, "SCS", "SC")) %>%
@@ -168,17 +168,20 @@ df_ordered <- reorder_points(df)
 
 
 ## Write a csv with the ordered points for a shape file
-write.csv(df_ordered, "Data/FBL_shape.csv")
+#write.csv(df_ordered, "Data/FBL_shape.csv")
 
 # Plot with geom_path
-ggplot(df_ordered, aes(x = lat1, y = lon1)) +
+ggplot(df_ordered, aes(y = lat1, x = lon1)) +
   geom_path() +
   labs(title = "Ordered Path")
 
 site_lengths = site_lengths %>% na.omit()
 
 
-site_lengths
+## Write a csv for site lengths for FBL shape file 
+#write.csv(site_lengths, "Data/FBL_SiteLengths.csv")
+
+
 for(i in 1:length(site_lengths$ID1)){
   i = 13
   if(i == 1){
