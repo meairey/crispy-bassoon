@@ -286,7 +286,7 @@ substrate = read.csv("Data/habitat_class1.csv") %>%
 site_lengths = substrate %>% group_by(water, site) %>%
   mutate(end = as.numeric(end)) %>% 
   summarize(ID1 = min(start),
-            ID2= max(end, na.rm = T)) 
+            ID2= max(end, na.rm = T)) %>% filter(water == "LML")
 # IDs for each site
 LML_ids = substrate %>% 
   filter(water == "LML") %>%
@@ -320,12 +320,26 @@ df= data.frame(ID1 = c(1:1000)) %>%
 # Apply reordering
 df_ordered <- reorder_points(df)
 
+
 # Write csv for LML shape
-write.csv(df_ordered, "Data/LML.shape.csv")
+#write.csv(df_ordered, "Data/LML.shape.csv")
+
 
 site_lengths = site_lengths %>% na.omit()
 
+site_lengths %>% print(n = 100)
 
+site_lengths[21, "ID1"] = 665
+
+
+gps %>% filter(ID == 678) 
+   
+
+
+
+# write csv for LML sites
+#write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
+write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
 for(i in 1:length(site_lengths$ID1)){
   
   frame = df_ordered %>% filter(ID1 <= site_lengths$ID2[i] & ID1 >= site_lengths$ID1[i] ) %>%
@@ -343,6 +357,8 @@ whole = substrate %>%
   mutate(end= as.numeric(end), 
          start = as.numeric(start)) %>%
   left_join(distance_pairs, by = c("start" = "ID1", "end" = "ID2")) 
+
+cat = whole %>% filter(site == "BEF.LML.021", feature == "O")
 
 whole_lml = whole %>%
   #filter(water == "LML") %>%

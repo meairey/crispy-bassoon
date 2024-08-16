@@ -124,7 +124,9 @@ FBL.shape = read.csv("Data/FBL_shape.csv") %>%
 FBL.shape[dim(FBL.shape)+1,] =FBL.shape[1,] 
 
 LML.shape = read.csv("Data/LML.shape.csv") %>%
-  select(-X) %>% rownames_to_column(var = "row")
+  select(-X) %>% 
+  rownames_to_column(var = "row") %>% 
+  unique()
 LML.shape[dim(LML.shape) +1, ] = LML.shape[1,]
 
 ### FBL Individual Map -----------
@@ -195,17 +197,19 @@ fbl.graph.geom  +
 ### LML Individual Map -----------
 
 ## Get site boundaries
-lml.sites = read.csv("Data/FBL_SiteLengths.csv") %>%
+lml.sites = read.csv("Data/LML_SiteLenghts.csv") %>%
   filter(water == "LML")
 ## Get points
 lml.graph = lml.sites %>% left_join(LML.shape) %>%
-  left_join(LML.shape, by = c("ID2" ="ID1")) 
+  left_join(LML.shape, by = c("ID2" ="ID1")) %>%
+  unique()
+
 
 
 habs = read.csv("Data/habs.csv") 
 
 lml.colors = habs %>% filter(WATER == "LML")
-colors = c("#254f5c","#e1b83c","#de7e43","#2b4155") 
+colors = c("#254f5c","#e1b83c","#de7e43","red") 
 col_join = data.frame(Habitat = unique(fbl.colors$Habitat), colors)
 lml.legend = (left_join(lml.colors, col_join ))$colors
 
@@ -222,11 +226,15 @@ lml.graph.geom = ggplot() +
 
 
 
-sites = unique(lml.sites$site)[1:32]
 
-for(i in 1:length(sites)){
+sites = (1:length(unique(lml.sites$site)[1:32]))[-23]
+
+
+
+for(i in sites){
   
-  lml.graph.geom = lml.graph.geom + 
+
+    lml.graph.geom = lml.graph.geom + 
     geom_path(data = LML.shape[lml.graph[i,"row.x"] : lml.graph[i,"row.y"],], 
               aes(y = lat1, x = lon1),
               col = lml.legend[i],
@@ -234,7 +242,20 @@ for(i in 1:length(sites)){
   
 }
 
-lml.graph.geom
+
+lml.graph.geom + 
+  geom_path(data = rbind(LML.shape[lml.graph[23,"row.y"] : dim(LML.shape)[1],], LML.shape[1,]), 
+            aes(y = lat1, x = lon1),
+            col = lml.legend[i],
+            size = 1) +
+  geom_point(data = point.dat, aes(x = lon1,y = lat1),col = "black",  size = 3) 
+
+
+
+LML.shape[lml.graph[23,"row.x"] : lml.graph[23,"row.y"],]
+
+
+
 point.dat = lml.sites %>% 
   left_join(LML.shape) %>%
   filter(water == "LML") %>%
