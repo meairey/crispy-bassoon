@@ -2,6 +2,7 @@
 library(tidyverse)
 library(gridExtra)
 library(vegan)
+library(ggrepel)
 
 ## LML ------
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
@@ -95,22 +96,28 @@ print(cca_model.lml)
 
 
 # Extract species scores
-species_scores.lml <- scores(cca_model.lml, display = "species")
+species_scores.lml <- scores(cca_model.lml, display = "species") %>% 
+  as.data.frame() %>%
+  rownames_to_column(var = "id") %>% 
+  left_join(read.csv("Data/legend.csv")) %>%
+  unite("ID",c(age, common), sep = " " )
+  
 # Extract site scores
 site_scores.lml <- scores(cca_model.lml, display = "sites")
 
 # cca_mo
 vectors.lml = summary(cca_model.lml)[4]$biplot %>% as.data.frame() %>% 
-  mutate(ID = rownames(.)) 
+  mutate(ID = rownames(.)) %>%
+  mutate(ID = c("Juvi. smallmouth bass", "Adult smallmouth bass", "Year","Boulders", "Cobbles", "CWD", "Emergent veg", "FWD", "Organic debris","Submerged veg"))
 
 # Plot the biplot
 LML.biplot = ggplot() +
   theme_minimal() + 
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
-  geom_text(data = species_scores.lml, aes(label = rownames(species_scores.lml), 
-                                       x = CCA1, y = CCA2), size = 5) +
-  geom_text(data = vectors.lml, aes(label = ID, x = CCA1, y = CCA2), col = "brown") + 
+  geom_text_repel(data = species_scores.lml, aes(label = ID, 
+                                       x = CCA1, y = CCA2), size = 3) +
+  geom_text_repel(data = vectors.lml, aes(label = ID, x = CCA1, y = CCA2), col = "brown") + 
   geom_segment(data = vectors.lml, aes(x = 0, y = 0, xend = CCA1, yend = CCA2),
                col = "brown", alpha = 0.5, arrow = arrow(length = unit(0.1, "inches"))) + 
   theme_minimal(base_size = 15) +
@@ -119,6 +126,29 @@ LML.biplot = ggplot() +
 
 LML.biplot
 
+## Make results table
+scores(cca_model.lml,  choices = 1:3)$biplot
+
+scores(cca_model.lml, choices = 1:3)$species
+
+print(cca_model.lml)
+
+
+# Extract inertia values from the CCA model
+
+# Extract eigenvalues
+eigenvalues.lml <- eigenvals(cca_model.lml) %>% 
+  as.data.frame() %>%
+  rename("value" = "x")%>%
+  rownames_to_column(var = "rowname") 
+
+CCA.lml = eigenvalues.lml %>% 
+  filter(grepl("CCA", rowname))
+CCA.lml
+
+# Display eigenvalues for constrained and unconstrained axes
+print(eigenvalues$CCA)  # Constrained axes eigenvalues
+print(eigenvalues$CA)   # Unconstrained axes eigenvalues
 # FBL -----------------------------
 
 
@@ -207,7 +237,11 @@ print(cca_model.fbl)
 cca_result.fbl <- cca_model.fbl
 
 # Extract species scores
-species_scores.fbl <- scores(cca_result.fbl, display = "species")
+species_scores.fbl <- scores(cca_result.fbl, display = "species")  %>% 
+  as.data.frame() %>%
+  rownames_to_column(var = "id") %>% 
+  left_join(read.csv("Data/legend.csv")) %>%
+  unite("ID",c(age, common), sep = " " )
 
 # Extract site scores
 site_scores.fbl <- scores(cca_result.fbl, display = "sites")
@@ -215,7 +249,10 @@ site_scores.fbl <- scores(cca_result.fbl, display = "sites")
 # cca_mo
 
 vectors.fbl = summary(cca_model.fbl)[4]$biplot %>% as.data.frame() %>% 
-  mutate(ID = rownames(.)) 
+  mutate(ID = rownames(.)) %>%
+  mutate(ID = c("Juvi. smallmouth bass", "Adult smallmouth bass", 
+                "Year", "Cobbles", "CWD", "Emergent veg", 
+                "FWD", "Organic debris","Submerged veg"))
 
 
 # Plot the biplot
@@ -223,11 +260,11 @@ FBL.biplot = ggplot() +
   theme_minimal() + 
   geom_hline( yintercept = 0, linetype = "dashed", color = "gray") +
   geom_vline( xintercept = 0, linetype = "dashed", color = "gray") +
-  geom_text(data = species_scores.fbl,
-            aes(label = rownames(species_scores.fbl),
+  geom_text_repel(data = species_scores.fbl,
+            aes(label = ID,
                 x = CCA1, y = CCA2),
-            size = 5) +
-  geom_text(data = vectors.fbl, 
+            size = 3) +
+  geom_text_repel(data = vectors.fbl, 
             aes(label = ID, 
                 x = CCA1,
                 y = CCA2),
@@ -243,6 +280,8 @@ FBL.biplot = ggplot() +
   theme_minimal(base_size = 15) +
   theme(legend.position = "none") + 
   xlim(-1.2, 1.5)
+
+FBL.biplot
 
 
 ## Plotting the two together ----------------

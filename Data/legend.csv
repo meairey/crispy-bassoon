@@ -1,0 +1,11 @@
+code,id,age_code,age,common
+CC,CC_1,1,adult,creek chub
+CC,CC_2,2,juvi,creek chub
+CS,CS_1,1,adult,common shiner
+CS,CS_2,2,juvi,common shiner
+WS,WS_1,1,adult,white sucker
+WS,WS_2,2,juvi,white sucker
+MM,MM_1,1,adult,central mudminnow
+MM,MM_2,2,juvi,central mudminnow
+PS,PS_1,1,adult,pumpkinseed
+PS,PS_2,2,juvi,pumpkinseed
