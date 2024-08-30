@@ -358,13 +358,14 @@ whole = substrate %>%
          start = as.numeric(start)) %>%
   left_join(distance_pairs, by = c("start" = "ID1", "end" = "ID2")) 
 
-cat = whole %>% filter(site == "BEF.LML.021", feature == "O")
+
 
 whole_lml = whole %>%
   #filter(water == "LML") %>%
   left_join(site_lengths %>% 
               filter(water == "LML"),
             by = "site") %>%
+  #filter(density > 1) %>% ## Filter out low density habitats
   group_by(site, feature, shoreline) %>%
   summarize(total_hab = sum(dist)) %>%
   mutate(percent_shoreline = total_hab / shoreline * 100)  %>%

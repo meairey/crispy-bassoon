@@ -1,6 +1,7 @@
 # Libraries --
 library(tidyverse)
 library(gridExtra)
+library(vegan)
 
 ## LML ------
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
@@ -8,8 +9,8 @@ LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>%
 
 
 env_updated.lml = read.csv("Data/LML_habitat.csv")  %>%
-  select(X, SITE_N, B, C, EV, FW, G, S, SV, O, BED, CW, everything())#  %>%
-  #mutate(across(c(-SITE_N, -X), ~ ifelse(. < 2, 0, 1))) ## Makes this just a presence absence of any habitat feature that is more than 20% of the shoreline
+  select(X, SITE_N, B, C, EV, FW, S, SV, O, BED, CW, everything())  %>%
+  mutate(across(c(-SITE_N, -X), ~ ifelse(. < 3, 0, 1))) ## Makes this just a presence absence of any habitat feature that is more than 20% of the shoreline
 
 
 
@@ -58,7 +59,9 @@ data_env.lml = data_com.lml %>%
          FW, O,
          SV,B,S,EV, CW, BED, C) %>%
   mutate(Year = as.numeric(Year)) %>%
-  ungroup()
+  ungroup() %>% ## Trying to incorporate site as a variable as well
+  separate(SITE_N, into = c("GEAR", "WATER", "SITE_N")) %>%
+  mutate(SITE_N = as.numeric(SITE_N))
 
 
 data_com.lml = data_com.lml %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_1, MM_2,
@@ -74,7 +77,7 @@ data_com.lml = data_com.lml %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_
 cca_model.lml = cca(data_com.lml ~ 
                   SMB_2 + 
                   SMB_1 +
-                  Year +
+                  Year  +
                   B +
                   BED +
                   C +
@@ -83,6 +86,7 @@ cca_model.lml = cca(data_com.lml ~
                   FW + 
                   O +
                   #S +
+                  #SITE_N +
                   SV,
                 data = data_env.lml)
 print(cca_model.lml)
@@ -113,16 +117,19 @@ LML.biplot = ggplot() +
   theme(legend.position = "none") + 
   xlim(-1.2, 1.5)
 
-
+LML.biplot
 
 # FBL -----------------------------
 
 
 FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
   column_to_rownames(var = "X")
+
 env_updated.fbl = read.csv("Data/FBL_habitat.csv") %>%
-  select(X, SITE_N, B, C, EV, FW, G, S, SV, O, BED, CW, everything()) #%>%
-  #mutate(across(c(-SITE_N, -X), ~ ifelse(. < 2, 0, 1)))
+  select(X, SITE_N, B, C, EV, FW,  S, SV, O, BED, CW, everything()) %>%
+  mutate(across(c(-SITE_N, -X), ~ ifelse(. < 3, 0, 1)))
+
+
 v.fbl = FBL.CPUE.w.sec %>% 
   mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
   pivot_longer(1:WS_2,
@@ -145,7 +152,7 @@ v.fbl = FBL.CPUE.w.sec %>%
 
 ## Load in data from CPUE_hab.Rmd file
 data.fbl = v.fbl %>% ## Used for changepoints graph
-  filter(Year > 2004) %>% ## Filter for after the start of ther emoval
+  filter(Year > 2004) %>% ## Filter for after the start of the removal
   mutate(value = value ) %>% ## not sure?
   left_join(env_updated.fbl) %>% ## Pull in this table from maps.R where we calculate percent shoreline of all different habitat features
   select(-ID) %>% 

@@ -242,13 +242,15 @@ for(i in sites){
   
 }
 
-
+## Need to check out site 18 and change the color of red 
 lml.graph.geom + 
   geom_path(data = rbind(LML.shape[lml.graph[23,"row.y"] : dim(LML.shape)[1],], LML.shape[1,]), 
             aes(y = lat1, x = lon1),
             col = lml.legend[i],
             size = 1) +
-  geom_point(data = point.dat, aes(x = lon1,y = lat1),col = "black",  size = 3) 
+  geom_point(data = point.dat, aes(x = lon1,y = lat1),col = "black",  size = 3)  +
+  xlab("") +
+  ylab("")
 
 
 
