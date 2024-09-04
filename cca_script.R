@@ -127,14 +127,7 @@ LML.biplot = ggplot() +
 LML.biplot
 
 ## Make results table
-scores(cca_model.lml,  choices = 1:3)$biplot
 
-scores(cca_model.lml, choices = 1:3)$species
-
-print(cca_model.lml)
-
-
-# Extract inertia values from the CCA model
 
 # Extract eigenvalues
 eigenvalues.lml <- eigenvals(cca_model.lml) %>% 
@@ -142,13 +135,30 @@ eigenvalues.lml <- eigenvals(cca_model.lml) %>%
   rename("value" = "x")%>%
   rownames_to_column(var = "rowname") 
 
+## Get unconstrained values
 CCA.lml = eigenvalues.lml %>% 
   filter(grepl("CCA", rowname))
-CCA.lml
+## Get constrained values
+CA.lml = eigenvalues.lml %>% 
+  filter(!grepl("CCA", rowname))
 
-# Display eigenvalues for constrained and unconstrained axes
-print(eigenvalues$CCA)  # Constrained axes eigenvalues
-print(eigenvalues$CA)   # Unconstrained axes eigenvalues
+## Summary stats for table
+total = sum(CCA.lml$value) + sum(CA.lml$value)
+CA =  sum(CA.lml$value) / total * 100 # The percent unconstrained variance in the CCA
+CCA = sum(CCA.lml$value) / total * 100
+CCA1 = CCA.lml$value[1] / total * 100
+CCA2 = CCA.lml$value[2] / total * 100
+CCA3 = CCA.lml$value[3] / total * 100
+CCA4 = CCA.lml$value[4] / total * 100
+eig.sum = data.frame(CCA1 = CCA1, CCA2 = CCA2, CCA3 = CCA3, CCA4 = CCA4)
+
+## Create table
+sum.table.lml = rbind(eig.sum, scores(cca_model.lml,  choices = 1:4)$biplot,
+      scores(cca_model.lml, choices = 1:4)$species)
+## Write table - there is also a cleaned excel workbook with table formating in the Tables_Figures folder in crispy_bassoon
+write.csv(sum.table.lml,"Data/CCA.lml.csv")
+
+
 # FBL -----------------------------
 
 
@@ -176,9 +186,12 @@ v.fbl = FBL.CPUE.w.sec %>%
   mutate(value = value * 60 * 60 ) %>%
   filter(Year != 2002 & Year > 2004)
 
+m = cor(env_updated.fbl %>% select(-SITE_N, -X))
 
-
-
+library(corrplot)
+m = cor(env_updated.lml %>% select(-SITE_N, -X, -B, -G, -R, -BED,-S))
+testRes = cor.mtest(env_updated.fbl %>% select(-SITE_N, -X, -B, -G, -R, -BED,-S), conf.level = 0.95)
+corrplot(m)
 
 ## Load in data from CPUE_hab.Rmd file
 data.fbl = v.fbl %>% ## Used for changepoints graph
@@ -250,8 +263,8 @@ site_scores.fbl <- scores(cca_result.fbl, display = "sites")
 
 vectors.fbl = summary(cca_model.fbl)[4]$biplot %>% as.data.frame() %>% 
   mutate(ID = rownames(.)) %>%
-  mutate(ID = c("Juvi. smallmouth bass", "Adult smallmouth bass", 
-                "Year", "Cobbles", "CWD", "Emergent veg", 
+  mutate(ID = c("Year",  "Adult smallmouth bass", "Juvi. smallmouth bass",
+                "Cobbles", "CWD", "Emergent veg", 
                 "FWD", "Organic debris","Submerged veg"))
 
 
@@ -284,6 +297,36 @@ FBL.biplot = ggplot() +
 FBL.biplot
 
 
+# Extract eigenvalues
+eigenvalues.fbl <- eigenvals(cca_model.fbl) %>% 
+  as.data.frame() %>%
+  rename("value" = "x")%>%
+  rownames_to_column(var = "rowname") 
+
+## Get unconstrained values
+CCA.fbl = eigenvalues.fbl %>% 
+  filter(grepl("CCA", rowname))
+## Get constrained values
+CA.fbl = eigenvalues.fbl %>% 
+  filter(!grepl("CCA", rowname))
+
+## Summary stats for table
+total = sum(CCA.fbl$value) + sum(CA.fbl$value)
+CA =  sum(CA.fbl$value) / total * 100 # The percent unconstrained variance in the CCA
+CCA = sum(CCA.fbl$value) / total * 100
+CCA1 = CCA.fbl$value[1] / total * 100
+CCA2 = CCA.fbl$value[2] / total * 100
+CCA3 = CCA.fbl$value[3] / total * 100
+CCA4 = CCA.fbl$value[4] / total * 100
+eig.sum = data.frame(CCA1 = CCA1, CCA2 = CCA2, CCA3 = CCA3, CCA4 = CCA4)
+
+## Create table
+sum.table.fbl = rbind(eig.sum, scores(cca_model.fbl,  choices = 1:4)$biplot,
+                      scores(cca_model.fbl, choices = 1:4)$species)
+## Write table - there is also a cleaned excel workbook with table formating in the Tables_Figures folder in crispy_bassoon
+write.csv(sum.table.fbl,"Data/CCA.fbl.csv")
+
+
 ## Plotting the two together ----------------
 
-grid.arrange(FBL.biplot, LML.biplot, ncol = 2)
+grid.arrange(LML.biplot, FBL.biplot, ncol = 2)

@@ -177,6 +177,7 @@ ggplot(df_ordered, aes(y = lat1, x = lon1)) +
 
 site_lengths = site_lengths %>% na.omit()
 
+(site_lengths %>% filter(water == "FBL"))$shoreline %>% sum()
 
 ## Write a csv for site lengths for FBL shape file 
 #write.csv(site_lengths, "Data/FBL_SiteLengths.csv")
@@ -386,6 +387,7 @@ ggplot() +
             col = "red") +
   scale_x_reverse()
 
+site_lengths$shoreline %>% sum()
 
  
 
