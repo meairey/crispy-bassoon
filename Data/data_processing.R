@@ -21,9 +21,6 @@ library(knitr)
 library(wesanderson)
 library(broom)
 
-
-
-
 ## Functions source -----------
 source("../AFRP/AFRP_Master_Code/AFRP_Functions.R")
 `%nin%` = Negate(`%in%`) # sets up a way to exclude if in a string
@@ -39,10 +36,10 @@ BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   filter(WATER %in% c("LML", "FBL"), 
          GEAR == "BEF",
          GEAR_CODE == "NAF") %>%
-  filter(MONTH %in% c(5,6,7))
+  filter(MONTH %in% c(5,6,7)) ## Filter to just sample the spring period of sampling
 
 
-rare_threashold = 50 
+rare_threashold = 50 ## To filter out rare taxa
 
 ## Habitat info 
 habs = read.csv("../AFRP/Data/BEFsites_LengthAndHabitat.csv") %>% 
@@ -52,84 +49,66 @@ filter(Water %in% c("FBL", "LML"))%>%
   filter(Habitat != "N") %>%
   rename("WATER" = Water)
 
-# LML --------------------------------------------------
+
 ## Removing species ---------------
 
-## change this based on preference
-rare = BEF_data_unfiltered %>% group_by(SPECIES) %>% 
+## Rare taxa are removed below the rare_threshold defined above
+rare = BEF_data_unfiltered %>% group_by(WATER, SPECIES) %>% 
   summarise(frequency = n()) %>% 
   filter(frequency < rare_threashold)
 stocked = c("LLS", "RT") ## Stocked fish in little moose
-remove = c(stocked, rare$SPECIES) ## Remove SMB + RWF (targeted 2000s)
-# I'm also going to remove LT and RS because I want to focus mostly on native littoral fishes 
+remove = c(stocked,  "LT", "RS","RWF") ## Remove stocked taxa, and pelagic taxa that we're not focusing on
 
-
-BEF_data = BEF_data_unfiltered %>% filter(SPECIES %nin% remove)
-
-
-
-
-
-
-### LML ---------------
+# Define Boat electrofishing data with target taxa only
+BEF_data = BEF_data_unfiltered %>%
+  left_join(rare) %>% ## Join rare data frame
+  filter(frequency > rare_threashold, # remove rare
+         SPECIES %nin% remove) %>% # remove stocked and non-target taxa
+  select(-frequency)
+## 
 
 
 LML_unfiltered = BEF_data_unfiltered %>% filter(WATER == "LML")
-## Fixing site issues 
 
 
+## Create matrices for each cluster of years that were sampled uniquely
 
+## Standardized siittets post 2000
+post_2000 = LML_unfiltered %>% # Take LML data
+  filter(YEAR == 2005) %>% ## Just filtered for any year during the standardized sampling
+  select(SITE_N) %>% # select just site numbers
+  unique() %>% ## unique sites
+  separate(SITE_N, into = c("year", "water", "SITE"), remove = F) %>% ## separate out to get the SITE component of the SITE_N
+  mutate(SITE_num = parse_number(SITE)) %>% ## Assign number in chronological order
+  select(SITE_N, SITE_num) ## select just the SITE_N and the new assigned name
+## 1998 sites -----------
+LML_1998_site = LML_unfiltered %>% ## Take LML data
+  filter(YEAR == 1998) %>% ## filter for 1998
+  select(SITE_N) %>% unique() %>% ## find unique sites
+  mutate(SITE_num = c(1:20)) ## assign site a new number in chronological order
 
-site_bin = c(1,4,5,9,13,16,18, 21, 23,27,31) ## for the simulations
-
-post_2002 = LML_unfiltered %>% filter(YEAR == 2005) %>% select(SITE_N) %>% unique() %>% 
-  separate(SITE_N, into = c("year", "water", "SITE"), remove = F) %>% 
-  mutate(SITE_num = parse_number(SITE)) %>% 
-  mutate(site_bin = .bincode(SITE_num, site_bin))  %>%
-  select(SITE_N, SITE_num, site_bin)
-
-
-
-## Create matrices for each cluster of years that were sampled in one way or another
-
-
-LML_1998_site = LML_unfiltered %>%
-  filter(YEAR == 1998) %>% 
-  select(SITE_N) %>% unique() %>% 
-  mutate(site_bin = c(1,1,1,1,2,3,3,3,4,4,5,7,8,11,10,10,4,5,1,1)) %>% 
-  mutate(SITE_num = c(1:20)) 
-
-
-LML_1998 = LML_unfiltered %>% filter(YEAR == 1998) %>% 
+LML_1998 = LML_unfiltered %>% filter(YEAR == 1998) %>% ## create a new data frame that joins these new site names with 1998 data
   left_join(LML_1998_site)
 
+## 1999 sites ------------
+lml_1999 = LML_unfiltered %>% ## Take LML Data
+  filter(YEAR == 1999) %>% ## Filter for 1999
+  dplyr::select(SITE_N) %>% unique() %>% ## Select for unique sites
+  filter(SITE_N !="NA") %>% ## remove any sites that are not identified
+  mutate(SITE_num = c(1:10)) ## assign site a new number in chronological order
 
-lml_1999 = LML_unfiltered %>%
-  filter(YEAR == 1999) %>% 
-  dplyr::select(SITE_N) %>% unique() %>% 
-  filter(SITE_N !="NA") %>% 
-  mutate(site_bin = c(2,3,4,1,5,7,8, 10,11,12)) %>% 
-  mutate(SITE_num = c(1:10))
-
-LML_1999 = LML_unfiltered %>% filter(YEAR == 1999) %>% 
+LML_1999 = LML_unfiltered %>% filter(YEAR == 1999) %>% ## create a new data frame that joins these new site names with 1999 data
   left_join(lml_1999)
 
-site_matrix = rbind(lml_1999, LML_1998_site, post_2002) %>%
+## Combine all the data frames together from 1998, 1999, and 2000+
+
+site_matrix = rbind(lml_1999, LML_1998_site, post_2000) %>%
   as.data.frame() 
 
-
-LML_data_2002 = BEF_data_unfiltered %>%
-  filter(YEAR > 1999) %>%
-  left_join(post_2002)# %>%
-# select(-SITE)
-
-
-
-LML_data_unfiltered = left_join(LML_unfiltered, site_matrix) %>%
-  mutate(SITE = SITE_N) %>%## Make sure to use this BEF_data_unfiltered for final graphs
+LML_data_unfiltered = left_join(LML_unfiltered, site_matrix) %>% ## Join the LML data with the matrix of new site numbers
+  mutate(SITE = SITE_N) %>% ## Make sure to use this BEF_data_unfiltered for final graphs
   mutate(SITE_cat = case_when(YEAR %nin% c(1998, 1999) ~ as.numeric(SITE_num),
                               YEAR %in% c(1998, 1999) ~ as.numeric(SITE_num))) %>%
-
   filter(SITE != "NA") %>% 
   select(SITE_N, SITE, everything())
 
@@ -139,33 +118,23 @@ LML.habs = read.csv("Data/updated_habitat.csv") %>%
   filter(Water == "LML") %>%
   filter(Habitat != "N") %>%
   rename(WATER = Water) %>%
-  rename(SITE_num = SITE)
-
-rare_LML = LML_data_unfiltered %>% group_by(SPECIES) %>% 
-  summarise(frequency = n()) %>% 
-  filter(frequency < rare_threashold)
-stocked = c("LLS", "RT") ## Stocked fish in little moose
-remove = c(stocked, rare$SPECIES, "ST") ## Remove SMB + RWF (targeted 2000s)
-# I'm also going to remove LT and RS because I want to focus mostly on native littoral fishes 
-
+  rename(SITE_num = SITE) %>%
+  select(WATER, SITE_N, Habitat) %>%
+  unique()
 
 ## Intermediate to go into LML.CPUE.w.sec
 LML_data = LML_data_unfiltered %>% filter(SPECIES %nin% remove) %>% 
   mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)), ## Length break is 100 mm
-                            SPECIES %in% c("MM","SS") ~.bincode(LENGTH, breaks = c(0,50,8000)) )) %>%
+                            SPECIES %in% c("MM","SS") ~.bincode(LENGTH, breaks = c(0,50,8000)))) %>%
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
   mutate(SITE = as.numeric(SITE)) %>%
-  
   left_join(LML.habs, by =) %>%
   rename(HAB_1 = Habitat) %>% 
-
   mutate(EFFORT = as.numeric(EFFORT)) %>%
   select(-SITE) %>%
   rename(SITE = SITE_N) %>%
   filter(SPECIES %nin% remove) 
-
-
 
 ## Final dataframe for analysis
 LML.CPUE.w.sec = CPUE_wide_seconds(LML_data) %>%
@@ -175,31 +144,30 @@ LML.CPUE.w.sec = CPUE_wide_seconds(LML_data) %>%
   filter(sumrow>0) %>%
   select(-sumrow)
 
-
-
-
-
+## Intermediate for c.h. that includes the site names and the habitats associated with them
 LML_cpue.habs = LML.CPUE.w.sec %>% 
+  unique() %>%
   mutate(names = rownames(.)) %>% 
   separate(names, into = c("YEAR", "SITE_N"), sep = "_") %>%
   left_join(LML.habs) %>% 
-  select(SITE_N, Habitat, everything())%>%
+  select(SITE_N, Habitat, everything()) %>%
   select(SITE_N, Habitat) %>%
   unique()
 
-species_names.LML = c("brown bullhead", "creek chub", "common shiner", "lake trout", "central mudminnow", "pumpkinseed", "rainbow smelt", "round whitefish", "smallmouth bass", "slimy sculpin","white sucker")
+## Species names for the species in LML
+species_names.LML = c("brown bullhead", "creek chub", "common shiner", "lake trout", 
+                      "central mudminnow", "pumpkinseed", "rainbow smelt", 
+                      "round whitefish", "smallmouth bass", "slimy sculpin","white sucker")
 
 
+## Matrix that includes the site_N and the new assigned site numbers
 c.h = unique(LML_cpue.habs) %>% na.omit() %>% mutate(SITE = c(c(1:13), c(1:5), c(1:32)))
+c.h = site_matrix %>% left_join(LML_cpue.habs) %>% na.omit() 
+dim(c.h)
 
 
-
-LML.CPUE.w.sec_avg = CPUE_wide_seconds_avg(LML_data) %>% 
-  pivot_longer(BB_1:WS_2, names_to = "SPECIES", values_to = "CPUE") 
-
-
-
-LMLtotals = LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
+LMLtotals = LML.CPUE.w.sec %>% 
+  mutate(ID = rownames(.)) %>%
   separate(ID, into = c("YEAR", "SITE_N"), sep = "_") %>%
   left_join(c.h) %>% 
   pivot_longer(BB_1:WS_2, names_to = "SPECIES", values_to = "CPUE") %>%
@@ -213,7 +181,8 @@ LMLtotals = LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
   mutate(percentage = n / sum(n))
 
 
-
+## Create data frame that will go into the changepoint analysis
+### Every site in each year is ordered through the total unique sites sampled that year that were assigned a habitat value
 
 
 LML.v = LML.CPUE.w.sec %>% 
@@ -232,14 +201,14 @@ LML.v = LML.CPUE.w.sec %>%
   mutate(value = value * 60 * 60 ) %>%
   filter(Year != 2002)
 
-
+## Because of site issues, remove the woody habitat descriptor from habitat
 
 LML.v = v %>% 
   mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
   mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
 
-
+## Write these into data files that can be loaded later
 save(file = "Data/LMLTotals.Rdata", LMLtotals)
 save(file = "Data/ChangePoint_Data/LMLV.Rdata", LML.v)
 ## -------------------------- First bisby -------------------------
@@ -255,12 +224,7 @@ FBL_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   select(-year, -water, -SITE) %>% 
   filter(MONTH %in% c(5,6,7))
 
-
-rare_FBL = FBL_data_unfiltered %>% group_by(SPECIES) %>% 
-  summarise(frequency = n()) %>% 
-  filter(frequency < rare_threashold)
-stocked = c("LLS", "RT") ## Stocked fish in little moose
-remove = c(stocked, rare$SPECIES, "RS", "CS") ## Remove SMB + RWF (targeted 2000s)
+FBL_data_unfiltered = BEF_data_unfiltered %>% filter(WATER == "FBL")
 
 
 # I'm also going to remove LT and RS because I want to focus mostly on native littoral fishes 
@@ -287,8 +251,6 @@ FBL_data = FBL_data_unfiltered %>%
 
 
 
-FBL_data
-
 
 FBL.CPUE.w.sec = ((CPUE_wide_seconds(FBL_data) %>%
                      unite("Group", c(YEAR, SITE)) %>% 
@@ -300,17 +262,6 @@ FBL.CPUE.w.sec = ((CPUE_wide_seconds(FBL_data) %>%
 site_hab = FBL_data %>% select(SITE, HAB_1) %>%
   rename(Site = SITE) %>%
   unique() %>% arrange(Site) %>% na.omit()
-
-
-FBL_cpue.habs = FBL.CPUE.w.sec %>% 
-  mutate(names = rownames(.)) %>% 
-  separate(names, into = c("year", "Site")) %>%
-  mutate(Site = as.numeric(Site)) %>% 
-  left_join(site_hab) %>%
-  select(Site, HAB_1) 
-
-
-
 
 species.FBL = colnames(FBL.CPUE.w.sec) 
 
@@ -330,11 +281,9 @@ FBL_v = FBL.CPUE.w.sec %>%
         c(SITE_N,Species), 
         sep = "_", 
         remove = F) %>%
-  # select(-SITE_N) %>%
   rename(HAB_1 = Habitat) %>%
   mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002)# %>%
-# filter(Year > 2000) 
+  filter(Year != 2002)
 
 save(file = "Data/ChangePoint_Data/FBL_v.RData", FBL_v)
 
@@ -365,6 +314,38 @@ write.csv(CPUE.w.sec, "CPUE_whole.csv")
 write.csv(habs, "habs.csv")
 
 
+## Supplemental 
 
+## Contain the catch data for each sampling event
+
+facet_data = data.frame(WATER = c("FBL", "LML"), 
+                        YEAR = c(2003, 2000))
+water_labels = c("FBL" = "First Bisby", "LML" = "Little Moose")
+
+BEF_data_unfiltered %>%
+  filter(WATER == "FBL" & YEAR > 2000 | WATER == "LML" & YEAR > 1997) %>%
+  select(WATER, YEAR, MONTH, SITE_N, EFFORT, DAY_N, GEAR_CODE) %>%
+  group_by(WATER, YEAR, MONTH, DAY_N, GEAR_CODE) %>%
+  summarize(EFFORT = sum(EFFORT)) %>%
+  filter(GEAR_CODE == "NAF", MONTH < 7) %>%
+  ggplot(aes(x = YEAR,
+             y = DAY_N,
+             col = round(EFFORT,digits = 2))) +
+  theme_minimal() +
+  geom_vline(data = facet_data, aes(xintercept =YEAR), linetype = 2) +
+ 
+  geom_point() + 
+  ylab("Day of Year") + 
+  labs(color = "Total Effort (sec)") +  
+
+  xlab("") + 
+  theme(axis.text = element_text(size = 13), 
+        #text = element_text(size = 13), 
+        axis.text.x = element_text(angle = 90, vjust = .5)) +
+  
+
+  xlim(1998, 2022) + 
+  scale_color_viridis_c(trans = "log", breaks = c(2980, 22026, 162754, 1202602)) + 
+  facet_wrap(~WATER, labeller = labeller(WATER = water_labels))
 
 
