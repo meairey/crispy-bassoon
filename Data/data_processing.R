@@ -25,31 +25,37 @@ library(broom)
 
 
 ## Functions source -----------
-source("AFRP_Master_Code/AFRP_Functions.R")
+source("../AFRP/AFRP_Master_Code/AFRP_Functions.R")
 `%nin%` = Negate(`%in%`) # sets up a way to exclude if in a string
 
 # Boat Electrofishing Data
 ## Contains the metadata for each sampling event
 sample = sample %>% mutate(SITE_N = str_replace(SITE_N, "BEF.FBL.003,4", 
                                                 "BEF.FBL.003"))
+
+
 ## Contain the catch data for each sampling event
 BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   filter(WATER %in% c("LML", "FBL"), 
          GEAR == "BEF",
          GEAR_CODE == "NAF") %>%
-  #separate(SITE_N, into = c("year", "water", "SITE"), remove = F) %>%
-  #select(-year, -water) %>% 
   filter(MONTH %in% c(5,6,7))
 
 
-# Length break for size
-length_break = 75
+rare_threashold = 50 
 
+## Habitat info 
+habs = read.csv("../AFRP/Data/BEFsites_LengthAndHabitat.csv") %>% 
+filter(Water %in% c("FBL", "LML"))%>%
+  select(Water, SITE_N, Habitat) %>%
+  na.omit() %>%
+  filter(Habitat != "N") %>%
+  rename("WATER" = Water)
 
 # LML --------------------------------------------------
 ## Removing species ---------------
 
-rare_threashold = 50 ## change this based on preference
+## change this based on preference
 rare = BEF_data_unfiltered %>% group_by(SPECIES) %>% 
   summarise(frequency = n()) %>% 
   filter(frequency < rare_threashold)
@@ -61,12 +67,8 @@ remove = c(stocked, rare$SPECIES) ## Remove SMB + RWF (targeted 2000s)
 BEF_data = BEF_data_unfiltered %>% filter(SPECIES %nin% remove)
 
 
-habs =read.csv("Data/BEFsites_LengthAndHabitat.csv") %>% 
-  filter(Water %in% c("FBL", "LML"))%>%
-  select(Water, SITE_N, Habitat) %>%
-  na.omit() %>%
-  filter(Habitat != "N") %>%
-  rename("WATER" = Water)
+
+
 
 
 ### LML ---------------
@@ -76,8 +78,7 @@ LML_unfiltered = BEF_data_unfiltered %>% filter(WATER == "LML")
 ## Fixing site issues 
 
 
-###bef_unfiltered_saved = BEF_data_unfiltered
-#BEF_data_unfiltered = bef_unfiltered_saved
+
 
 site_bin = c(1,4,5,9,13,16,18, 21, 23,27,31) ## for the simulations
 
@@ -128,23 +129,17 @@ LML_data_unfiltered = left_join(LML_unfiltered, site_matrix) %>%
   mutate(SITE = SITE_N) %>%## Make sure to use this BEF_data_unfiltered for final graphs
   mutate(SITE_cat = case_when(YEAR %nin% c(1998, 1999) ~ as.numeric(SITE_num),
                               YEAR %in% c(1998, 1999) ~ as.numeric(SITE_num))) %>%
-  #dplyr::select(-SITE) %>% 
-  #rename(SITE = SITE_cat) %>%
+
   filter(SITE != "NA") %>% 
   select(SITE_N, SITE, everything())
 
 
 
-
-
-
-
-
-#LML.CPUE.w.sec = read.csv("Data/CPUE.w.sec.csv")
-
 LML.habs = read.csv("Data/updated_habitat.csv") %>%
   filter(Water == "LML") %>%
-  filter(Habitat != "N")
+  filter(Habitat != "N") %>%
+  rename(WATER = Water) %>%
+  rename(SITE_num = SITE)
 
 rare_LML = LML_data_unfiltered %>% group_by(SPECIES) %>% 
   summarise(frequency = n()) %>% 
@@ -156,18 +151,21 @@ remove = c(stocked, rare$SPECIES, "ST") ## Remove SMB + RWF (targeted 2000s)
 
 ## Intermediate to go into LML.CPUE.w.sec
 LML_data = LML_data_unfiltered %>% filter(SPECIES %nin% remove) %>% 
-  mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)), 
+  mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)), ## Length break is 100 mm
                             SPECIES %in% c("MM","SS") ~.bincode(LENGTH, breaks = c(0,50,8000)) )) %>%
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
   mutate(SITE = as.numeric(SITE)) %>%
-  left_join(LML.habs) %>%
+  
+  left_join(LML.habs, by =) %>%
   rename(HAB_1 = Habitat) %>% 
-  #mutate(WATER == "FBL") %>%
+
   mutate(EFFORT = as.numeric(EFFORT)) %>%
   select(-SITE) %>%
   rename(SITE = SITE_N) %>%
   filter(SPECIES %nin% remove) 
+
+
 
 ## Final dataframe for analysis
 LML.CPUE.w.sec = CPUE_wide_seconds(LML_data) %>%
@@ -201,7 +199,7 @@ LML.CPUE.w.sec_avg = CPUE_wide_seconds_avg(LML_data) %>%
 
 
 
-totals = LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
+LMLtotals = LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
   separate(ID, into = c("YEAR", "SITE_N"), sep = "_") %>%
   left_join(c.h) %>% 
   pivot_longer(BB_1:WS_2, names_to = "SPECIES", values_to = "CPUE") %>%
@@ -214,6 +212,36 @@ totals = LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
   summarise(n = sum(mean_CPUE)) %>%
   mutate(percentage = n / sum(n))
 
+
+
+
+
+LML.v = LML.CPUE.w.sec %>% 
+  mutate(y_s = rownames(LML.CPUE.w.sec)) %>%
+  pivot_longer(1:length(colnames(LML.CPUE.w.sec)),
+               names_to = "Species") %>%
+  separate(y_s, 
+           into = c("Year", "SITE_N"), sep = "_") %>%
+  left_join(c.h) %>%
+  unite("ID", 
+        c(SITE,Species), 
+        sep = "_", 
+        remove = F) %>%
+  select(-SITE_N) %>%
+  rename(HAB_1 = Habitat) %>%
+  mutate(value = value * 60 * 60 ) %>%
+  filter(Year != 2002)
+
+
+
+LML.v = v %>% 
+  mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
+  mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
+  filter(HAB_1 != "NA")
+
+
+save(file = "Data/LMLTotals.Rdata", LMLtotals)
+save(file = "Data/ChangePoint_Data/LMLV.Rdata", LML.v)
 ## -------------------------- First bisby -------------------------
 
 # Removing species ---------------
@@ -233,6 +261,8 @@ rare_FBL = FBL_data_unfiltered %>% group_by(SPECIES) %>%
   filter(frequency < rare_threashold)
 stocked = c("LLS", "RT") ## Stocked fish in little moose
 remove = c(stocked, rare$SPECIES, "RS", "CS") ## Remove SMB + RWF (targeted 2000s)
+
+
 # I'm also going to remove LT and RS because I want to focus mostly on native littoral fishes 
 
 c.h.FBL = habs%>% filter(WATER == "FBL")
@@ -246,27 +276,18 @@ FBL_data = FBL_data_unfiltered %>%
                             SPECIES %in% c("SS") ~.bincode(LENGTH, breaks = c(0,25,8000))))%>%
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
-  #mutate(SITE = as.numeric(SITE)) %>%
   left_join(c.h.FBL) %>%
+
   rename(HAB_1 = Habitat) %>% 
-  mutate(WATER == "FBL") %>%
+  mutate(WATER = "FBL") %>%
   mutate(EFFORT = as.numeric(EFFORT)) %>%
   filter(YEAR >= 2001) %>%
-  filter(YEAR<2023) %>%
+  filter(YEAR <2023) %>%
   rename(SITE = SITE_N)
 
 
-FBL_data_unfiltered %>% filter(SPECIES %nin% remove) %>% 
-  
-  mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)),
-                            SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,50,8000)),
-                            SPECIES %in% c("SS") ~.bincode(LENGTH, breaks = c(0,25,8000)))) %>%
-  unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
-  filter(!is.na(LENGTH)) %>%
-  mutate(SITE = as.numeric(SITE)) %>%
-  filter(YEAR == 2004)
 
-
+FBL_data
 
 
 FBL.CPUE.w.sec = ((CPUE_wide_seconds(FBL_data) %>%
@@ -276,6 +297,11 @@ FBL.CPUE.w.sec = ((CPUE_wide_seconds(FBL_data) %>%
                      filter(sumrow>0) %>%
                      select(-sumrow))) 
 
+site_hab = FBL_data %>% select(SITE, HAB_1) %>%
+  rename(Site = SITE) %>%
+  unique() %>% arrange(Site) %>% na.omit()
+
+
 FBL_cpue.habs = FBL.CPUE.w.sec %>% 
   mutate(names = rownames(.)) %>% 
   separate(names, into = c("year", "Site")) %>%
@@ -283,9 +309,7 @@ FBL_cpue.habs = FBL.CPUE.w.sec %>%
   left_join(site_hab) %>%
   select(Site, HAB_1) 
 
-site_hab = FBL_data %>% select(SITE, HAB_1) %>%
-  rename(Site = SITE) %>%
-  unique() %>% arrange(Site) %>% na.omit()
+
 
 
 species.FBL = colnames(FBL.CPUE.w.sec) 
@@ -293,6 +317,29 @@ species.FBL = colnames(FBL.CPUE.w.sec)
 species_names.FBL = c("Creek Chub","Lake Trout","Central Mudminnow", "Smallmouth Bass",  "Brook Trout", "White Sucker")
 
 length_graph = rep(c("< 100 mm", "> 100 mm"), length(species_names.FBL))
+
+
+FBL_v = FBL.CPUE.w.sec %>% 
+  mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
+  pivot_longer(1:length(species.FBL),
+               names_to = "Species") %>%
+  separate(y_s, 
+           into = c("Year", "SITE_N"), sep = "_") %>%
+  left_join(habs) %>%
+  unite("ID", 
+        c(SITE_N,Species), 
+        sep = "_", 
+        remove = F) %>%
+  # select(-SITE_N) %>%
+  rename(HAB_1 = Habitat) %>%
+  mutate(value = value * 60 * 60 ) %>%
+  filter(Year != 2002)# %>%
+# filter(Year > 2000) 
+
+save(file = "Data/ChangePoint_Data/FBL_v.RData", FBL_v)
+
+
+
 
 ## Change through time -----------------------------------------------------
 BEF_data = BEF_data_unfiltered %>% 

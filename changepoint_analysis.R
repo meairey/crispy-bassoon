@@ -1,3 +1,8 @@
+library(ecp)
+library(pscl)
+library(wesanderson)
+library(tidyverse)
+`%nin%` = Negate(`%in%`)
 ## LML -------------------------------
 
 #### These are the changepoint analyses of all habitats and species 
@@ -13,27 +18,43 @@ species = colnames(LML.CPUE.w.sec)
 
 change_points_list = list()
 
-
-v = LML.CPUE.w.sec  %>%
-  mutate(y_s = rownames(LML.CPUE.w.sec)) %>%
-  pivot_longer(1:WS_2,
-               names_to = "Species") %>%
-  separate(y_s, 
-           into = c("Year", "SITE_N"), sep = "_") %>%
-  left_join(c.h) %>%
-  unite("ID", 
-        c(SITE,Species), 
-        sep = "_", 
-        remove = F) %>%
-  select(-SITE_N) %>%
-  rename(HAB_1 = Habitat) %>%
-  mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002)# %>%
-# filter(Year > 2000) 
-summary_graph_data = list() 
+pal_con = wes_palette("Zissou1", type ="continuous")
+cat = wes_palette("Zissou1", type ="discrete")
 
 
-v = v %>% 
+
+
+pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
+
+
+## Creating data for habitat assignments 
+
+load("Data/ChangePoint_Data/LMLV.Rdata")
+
+LML.habs = LML.v %>% select(Year, SITE, HAB_1) %>%
+  unique()
+
+
+
+#LML.habs = read.csv("Data/updated_habitat.csv") %>%
+  filter(Water == "LML") %>%
+  filter(Habitat != "N")
+
+#LML_cpue.habs = LML.CPUE.w.sec %>% 
+  mutate(names = rownames(.)) %>% 
+  separate(names, into = c("YEAR", "SITE_N"), sep = "_") %>%
+  left_join(LML.habs) %>% 
+  select(SITE_N, Habitat, everything())%>%
+  select(SITE_N, Habitat) %>%
+  unique()
+
+c.h = unique(LML_cpue.habs) %>% na.omit() %>% mutate(SITE = c(c(1:13), c(1:5), c(1:32)))
+
+
+
+
+## For little moose remove the woody designations
+LML.v = LML.v %>% 
   mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
   mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
@@ -53,7 +74,7 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
   list_habitats = list()
   for(h in c("S","R")){
     # Set up data frame
-    x = v %>%
+    x = LML.v %>%
       #filter(Year > 1999) %>%
       #rename(HAB_1 = Habitat) %>%
       filter(Species == species[i], HAB_1 == h) %>%
@@ -96,9 +117,9 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
                         sig.lvl = .05)
     
     # Format data -------------------------
-    dat = data.frame(Year = unique(v$Year), 
+    dat = data.frame(Year = unique(LML.v$Year), 
                      color = output$cluster)
-    v_mod = left_join(v,dat) 
+    v_mod = left_join(LML.v,dat) 
     
     ## Poisson count data regression 
     po_v = v_mod %>% mutate(value_round = round(value*60, digits = 0)) %>% 
@@ -165,96 +186,63 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
 ## Final Figure
 cp_lines = read.csv("Data/hab_cp.csv") %>% filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% filter(WATER == "LML")
 
-LML.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
-  separate(ID, into = c("YEAR", "SITE_N"), sep = "_") %>%
-  left_join(c.h) %>%
-  mutate(Habitat = str_replace(Habitat, "SW", "S")) %>%
-  mutate(Habitat = str_replace(Habitat, "RW", "R")) %>%
-  filter(Habitat != "NA")%>%
   
-  pivot_longer(BB_1:WS_2, names_to = "SPECIES", values_to = "CPUE") %>%
-  group_by(YEAR, Habitat, SPECIES) %>%
-  summarize(mean_CPUE = mean(CPUE)) %>%
+LML.v %>%
+  group_by(Year, HAB_1, Species) %>%
+  summarize(mean_CPUE = mean(value)) %>%
   ungroup() %>%
-  separate(SPECIES, into = c("SP", "AGE"), remove = F)  %>%
-  group_by(SP, YEAR) %>%
-  left_join(totals) %>% 
-  arrange(SP, YEAR) %>%
-  filter(Habitat != "NA") %>%
-  mutate(percentage = mean_CPUE / n) %>%
+  separate(Species, into = c("SP", "AGE"), remove = F)  %>%
+  group_by(SP, Year) %>%
+  arrange(SP, Year) %>%
+  filter(HAB_1 != "NA") %>%
   filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>%
-  ggplot(aes(x = as.numeric(YEAR), y = ((mean_CPUE)*60)+1, fill = interaction(Habitat, AGE), col = interaction(Habitat, AGE))) + 
-  #ggplot(aes(x = as.numeric(YEAR), y = (mean_CPUE*60), fill = interaction(Habitat, AGE))) + 
+  ggplot(aes(x = as.numeric(Year), y = ((mean_CPUE))+1, fill = interaction(HAB_1, AGE), col = interaction(HAB_1, AGE))) + 
   theme_classic() +
-  theme(
-    #panel.border = element_rect(color = "black", fill = NA),
-    strip.background = element_blank(),
-    
-  ) +
+  theme(strip.background = element_blank()) +
   geom_area(position = "identity", alpha = .00001, size = 1)+ 
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
-  scale_y_log10() + 
+  #scale_y_log10() + 
   facet_wrap(~SP, scales = "free_y") +
-  scale_fill_manual(#values = pal_con[c(1,2,4,5,6,7,9,10)],
-    values = pal_con[c(1,3,5,7)], 
-    labels = c("R-Juvenile",
-               #"RW-Juvenile",
-               "S-Juvenile",
-               #"SW-Juvenile",
-               "R-Adult",
-               #"RW-Adult",
-               "S-Adult"#,
-               #"SW-Adult"
-    )) + 
+  scale_fill_manual(values = pal_custom[c(1,2,4,5)],
+                    labels = c("R-Juvenile", # 1 ## These numbers represent the values for the pallete
+                               "S-Juvenile", #3
+                               "R-Adult", #5
+                               "S-Adult" #7 
+                               )) + 
   theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
   labs(fill = "Habitat & Age") + 
   xlab("") + 
-  ylab("CPUE (ind/min) + 1") +
-  
+  ylab("CPUE (ind/hour) + 1") +
   geom_vline(aes(xintercept = 2000), col = "black", linetype = 1, size = .5) + 
   geom_vline(aes(xintercept = YEAR, col = interaction(Habitat,AGE)),
              data = cp_lines, size = .5, linetype = 2) +
   scale_color_manual(guide = "none", 
-                     values = pal_con[c(1,3,5,7)], 
+                     values =  pal_custom[c(1,2,4,5)],
                      
-                     labels = c("R-Juvenile",
-                                #"RW-Juvenile",
-                                "S-Juvenile",
-                                #"SW-Juvenile",
-                                "R-Adult",
-                                #"RW-Adult",
-                                "S-Adult"#,
-                                #"SW-Adult"
+                     labels = c("R-Juvenile", #1 ## These numbers represent the values for the pallete
+                                "S-Juvenile", #2
+                                "R-Adult", #3
+                                "S-Adult" #5
+                                
                      )) 
+pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
+
+
+ ## FBL --------
 
 
 
-## FBL --------
+
 FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
   column_to_rownames(var = "X")
 vec = vector()
 p.val = vector()
 species = colnames(FBL.CPUE.w.sec)
 
-
+load("Data/ChangePoint_Data/FBL_v.RData")
 
 change_points_list = list()
-v = FBL.CPUE.w.sec %>% 
-  mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
-  pivot_longer(1:length(species),
-               names_to = "Species") %>%
-  separate(y_s, 
-           into = c("Year", "SITE_N"), sep = "_") %>%
-  left_join(habs) %>%
-  unite("ID", 
-        c(SITE_N,Species), 
-        sep = "_", 
-        remove = F) %>%
-  # select(-SITE_N) %>%
-  rename(HAB_1 = Habitat) %>%
-  mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002)# %>%
-# filter(Year > 2000) 
+
 summary_graph_data = list()
 
 v = v %>% 
@@ -274,8 +262,8 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
   list_habitats = list()
   for(h in c("S","SW","RW")){
     # Set up data frame
-    x = v %>%
-      select(-X) %>%
+    x = FBL_v %>%
+      #select(-X) %>%
       #filter(Year > 1999) %>%
       #rename(HAB_1 = Habitat) %>%
       filter(Species == species[i], HAB_1 == h) %>%
@@ -298,9 +286,9 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
                         sig.lvl = .05)
     
     # Format data -------------------------
-    dat = data.frame(Year = unique(v$Year), 
+    dat = data.frame(Year = unique(FBL_v$Year), 
                      color = output$cluster)
-    v_mod = left_join(v,dat)
+    v_mod = left_join(FBL_v,dat)
     
     po_v = v_mod %>% mutate(value_round = round(value, digits = 0)) %>% 
       filter(Year > 2000) %>%
@@ -366,35 +354,39 @@ cp_lines = read.csv("Data/hab_cp.csv") %>%
   filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% 
   filter(WATER == "FBL") 
 
+habs = read.csv("Data/habs.csv") %>%
+  select(-X)
 
-FBL.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
-  separate(ID, into = c("YEAR", "SITE_N"), sep = "_") %>%
-  left_join(habs) %>% 
-  pivot_longer(CC_1:WS_2, names_to = "SPECIES", values_to = "CPUE") %>%
-  group_by(YEAR, Habitat, SPECIES) %>%
-  summarize(mean_CPUE = mean(CPUE)) %>%
+FBL_v %>%
+  group_by(Year, HAB_1, Species) %>%
+  summarize(mean_CPUE = mean(value)) %>%
   ungroup() %>%
-  separate(SPECIES, into = c("SP", "AGE"), remove = F)  %>%
-  group_by(SP, YEAR) %>%
-  left_join(totals) %>% 
-  arrange(SP, YEAR) %>%
-  filter(Habitat != "NA") %>%
-  mutate(percentage = mean_CPUE / n) %>%
+  separate(Species, into = c("SP", "AGE"), remove = F)  %>%
+  
+  
+  group_by(SP, Year) %>%
+  
+
+  arrange(SP, Year) %>%
+  filter(HAB_1 != "NA") %>%
+
   filter(SP %nin% c("LT","ST")) %>%
-  ggplot(aes(x = as.numeric(YEAR), y = ((mean_CPUE)*60)+1,fill = interaction(Habitat, AGE),  col= interaction(Habitat, AGE))) + 
+  ggplot(aes(x = as.numeric(Year), y = ((mean_CPUE))+1,fill = interaction(HAB_1, AGE),  col= interaction(HAB_1, AGE))) + 
   theme_classic() +
-  theme(
-    #panel.border = element_rect(color = "black", fill = NA),
-    strip.background = element_blank(),
-    
-  ) +
-  geom_area(alpha = .00009, position = 'identity' , size = 1)+ scale_y_log10() + 
+  theme(strip.background = element_blank()) +
+  geom_area(alpha = .00009, position = 'identity' , size = 1) +
+  #scale_y_log10() + 
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   
   facet_wrap(~SP, scales = "free_y") +
-  scale_fill_manual(values = pal_con[1:8][c(-1, -5)], 
-                    labels = c("RW-Juvenile","S-Juvenile",
-                               "SW-Juvenile", "RW-Adult","S-Adult",
+  scale_fill_manual(#values = pal_con[1:8][c(-1, -5)],
+                    #values = pal_con[c(2,3,4,6,7,8)],
+                    values = pal_custom[1:6],
+                    labels = c("RW-Juvenile",
+                               "S-Juvenile",
+                               "SW-Juvenile", 
+                               "RW-Adult",
+                               "S-Adult",
                                "SW-Adult")) + 
   theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
   labs(fill = "Habitat & Age") + 
@@ -402,16 +394,18 @@ FBL.CPUE.w.sec %>% mutate(ID = rownames(.)) %>%
   ylab("CPUE (ind/min) + 1") + 
   geom_vline(aes(xintercept = 2003)) + 
   geom_vline(aes(xintercept = (YEAR), color =  interaction(Habitat, AGE)), data = cp_lines, linetype = 2, size = .5)  +
-  scale_color_manual(guide = "none", values =  pal_con[1:8][c(-1, -5)], 
-                     labels = c("R-Juvenile",
-                                "RW-Juvenile",
+  scale_color_manual(guide = "none", 
+                     values = pal_custom,
+                     #values =  pal_con[c(2,3,4,6,7,8)], 
+                     labels = c("RW-Juvenile",
                                 "S-Juvenile",
-                                "SW-Juvenile",
-                                "R-Adult",
+                                "SW-Juvenile", 
                                 "RW-Adult",
                                 "S-Adult",
-                                "SW-Adult"
-                     )) 
+                                "SW-Adult")) 
+
+
+
 
 
 
