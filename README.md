@@ -10,7 +10,7 @@ Little Moose Lake is the site of a long term smallmouth bass removal project. Th
 This is primarily conducted through the use of a change point analysis through the package `ecp` and a zero-inflated regression through the package `pscl`. Additionally, habitat associations are assessed through a CCA analysis and the package `vegan`.
 
 
-Below is an example of the summary results of the changepoint analysis. 
+Below is an example of the summary results of the change point analysis. 
 
 ![image of graph](https://github.com/meairey/crispy-bassoon/blob/main/Figures_Tables/Fig5_ChangepointLML.jpeg)
 
