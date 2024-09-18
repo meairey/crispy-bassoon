@@ -1,3 +1,4 @@
+setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon")
 library(ecp)
 library(pscl)
 library(wesanderson)
@@ -52,7 +53,7 @@ color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), colo
 
 list_coef.R = list()
 list_coef.S = list()
-coef_dat = NA
+coef.dat = NA
 ## Fixed change point using multiple sites a year as multivariate --------- 
 for(i in 1:length(LML.CPUE.w.sec[1,])){
   list_habitats = list()
@@ -167,7 +168,7 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
     xlab(paste(species_graph[i], " (",length_graph[i],") ")) +
     theme(text = element_text(size = 14)) 
   
-  #print(graph)
+  print(graph)
   
   
 }
@@ -247,7 +248,7 @@ FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>%
   column_to_rownames(var = "X")
 vec = vector()
 p.val = vector()
-species = colnames(FBL.CPUE.w.sec)
+species = colnames(FBL.CPUE.w.sec)[c(-3,-4) ]
 
 load("Data/ChangePoint_Data/FBL_v.RData")
 
@@ -262,7 +263,7 @@ list_coef.R = list()
 list_coef.S = list()
 list_coef.SW = list()
 ## Fixed change point using multiple sites a year as multivariate --------- 
-for(i in 1:length(FBL.CPUE.w.sec[1,])){
+for(i in 1:length(species)){
   list_habitats = list()
   for(h in c("S","SW","RW")){
     # Set up data frame
@@ -281,8 +282,8 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
     
     # Run change  point analysis ---------------
     output = e.divisive(as.data.frame(x), 
-                        R = 1000, 
-                        alpha = 2, 
+                        R = 10000, 
+                        alpha = 1, 
                         min.size = 2,
                         sig.lvl = .05)
     
@@ -352,7 +353,7 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
           legend.position = "none") + 
     xlim(1998, 2023) +
     ylab(paste("CPUE (indv / hour)")) +
-    xlab(paste(species_graph[i], " (",length_graph[i],") ")) +
+    xlab(paste(species[i], " (",length_graph[i],") ")) +
     theme(text = element_text(size = 14)) 
   
   print(graph)
@@ -404,6 +405,8 @@ coefs = rbind(coefs.LML, coefs.FBL) %>%
 coefs
 write.csv(coefs, row.names = F, file = "Data/Coef.csv")
 ## Final Plots ----------------------
+
+
 cp_lines = read.csv("Data/hab_cp.csv") %>% 
   filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% 
   filter(WATER == "FBL") 

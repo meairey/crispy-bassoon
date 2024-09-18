@@ -1,6 +1,6 @@
 ## !!!Run this to make sure that you have the right directory!!!
 
-setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/AFRP/")
+setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
 
 # Libraries --------------------------
 
@@ -42,7 +42,8 @@ BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
 rare_threashold = 50 ## To filter out rare taxa
 
 ## Habitat info 
-habs = read.csv("../AFRP/Data/BEFsites_LengthAndHabitat.csv") %>% 
+## iMPORTANT TO TAKE OUT OF CRIPSY-BASSOON REPOSITORY
+habs = read.csv("../crispy-bassoon/Data/updated_habitat.csv") %>% 
 filter(Water %in% c("FBL", "LML"))%>%
   select(Water, SITE_N, Habitat) %>%
   na.omit() %>%
@@ -162,7 +163,7 @@ species_names.LML = c("brown bullhead", "creek chub", "common shiner", "lake tro
 
 ## Matrix that includes the site_N and the new assigned site numbers
 c.h = unique(LML_cpue.habs) %>% na.omit() %>% mutate(SITE = c(c(1:13), c(1:5), c(1:32)))
-c.h = site_matrix %>% left_join(LML_cpue.habs) %>% na.omit() 
+#c.h = site_matrix %>% left_join(LML_cpue.habs) %>% na.omit() 
 dim(c.h)
 
 
@@ -203,14 +204,14 @@ LML.v = LML.CPUE.w.sec %>%
 
 ## Because of site issues, remove the woody habitat descriptor from habitat
 
-LML.v = v %>% 
+LML.v = LML.v %>% 
   mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
   mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
 
 ## Write these into data files that can be loaded later
-save(file = "Data/LMLTotals.Rdata", LMLtotals)
-save(file = "Data/ChangePoint_Data/LMLV.Rdata", LML.v)
+save(file = "../crispy-bassoon/Data/LMLTotals.Rdata", LMLtotals)
+save(file = "../crispy-bassoon/Data/ChangePoint_Data/LMLV.Rdata", LML.v)
 ## -------------------------- First bisby -------------------------
 
 # Removing species ---------------
@@ -224,7 +225,10 @@ FBL_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   select(-year, -water, -SITE) %>% 
   filter(MONTH %in% c(5,6,7))
 
-FBL_data_unfiltered = BEF_data_unfiltered %>% filter(WATER == "FBL")
+
+FBL_data_unfiltered %>% filter(YEAR < 2005) %>% select(WATER, SITE_N, MONTH,YSAMP_N) %>% unique()
+
+FBL_data_unfiltered = BEF_data_unfiltered %>% filter(WATER == "FBL") 
 
 
 # I'm also going to remove LT and RS because I want to focus mostly on native littoral fishes 
@@ -282,10 +286,10 @@ FBL_v = FBL.CPUE.w.sec %>%
         sep = "_", 
         remove = F) %>%
   rename(HAB_1 = Habitat) %>%
-  mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002)
+  mutate(value = value * 60 * 60 ) #%>%
+  #filter(Year != 2002)
 
-save(file = "Data/ChangePoint_Data/FBL_v.RData", FBL_v)
+save(file = "../crispy-bassoon/Data/ChangePoint_Data/FBL_v.RData", FBL_v)
 
 
 
@@ -349,3 +353,19 @@ BEF_data_unfiltered %>%
   facet_wrap(~WATER, labeller = labeller(WATER = water_labels))
 
 
+
+site.hab.table = BEF_data_unfiltered %>%
+  filter(WATER == "FBL" & YEAR > 2000 | WATER == "LML" & YEAR > 1997 & YEAR != 2002, 
+         GEAR_CODE == "NAF") %>%
+  select(WATER, YEAR,  SITE_N, GEAR_CODE) %>%
+  left_join(habs) %>%
+  unique() %>%
+  group_by(WATER, YEAR, Habitat) %>%
+
+  summarize(n = n()) %>%
+  na.omit() %>%
+  pivot_wider(names_from = Habitat, values_from = n) %>%
+  mutate(R = replace_na(R, 0))
+
+
+write.csv(file = "Figures_Tables/SiteHabTable.csv", site.hab.table, rownames = F)
