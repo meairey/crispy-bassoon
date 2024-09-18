@@ -1,11 +1,13 @@
 code,id,age_code,age,common
-CC,CC_1,1,adult,creek chub
-CC,CC_2,2,juvi,creek chub
-CS,CS_1,1,adult,common shiner
-CS,CS_2,2,juvi,common shiner
-WS,WS_1,1,adult,white sucker
-WS,WS_2,2,juvi,white sucker
-MM,MM_1,1,adult,central mudminnow
-MM,MM_2,2,juvi,central mudminnow
-PS,PS_1,1,adult,pumpkinseed
-PS,PS_2,2,juvi,pumpkinseed
+CC,CC_1,1,Juvenile,Creek chub
+CC,CC_2,2,Adult,Creek chub
+CS,CS_1,1,Juvenile,Common shiner
+CS,CS_2,2,Adult,Common shiner
+WS,WS_1,1,Juvenile,White sucker
+WS,WS_2,2,Adult,White sucker
+MM,MM_1,1,Juvenile,Central mudminnow
+MM,MM_2,2,Adult,Central mudminnow
+PS,PS_1,1,Juvenile,Pumpkinseed
+PS,PS_2,2,Adult,Pumpkinseed
+SMB,SMB_1,1,Juvenile,Smallmouth bass
+SMB,SMB_2,2,Adult,Smallmouth bass

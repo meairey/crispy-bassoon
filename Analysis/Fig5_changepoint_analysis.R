@@ -9,6 +9,7 @@ library(tidyverse)
 
 ## Habitat changepoints ------------------
 
+
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
   column_to_rownames(var = "X")
 species_names = c("brown bullhead", "creek chub", "common shiner", "lake trout", "central mudminnow", "pumpkinseed", "rainbow smelt", "round whitefish", "smallmouth bass", "slimy sculpin","white sucker")
@@ -21,8 +22,7 @@ change_points_list = list()
 pal_con = wes_palette("Zissou1", type ="continuous")
 cat = wes_palette("Zissou1", type ="discrete")
 
-
-
+labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
 
 pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
 
@@ -50,7 +50,9 @@ rocky.99= c(3,2)
 color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), color = c(1:4))
 
 
-
+list_coef.R = list()
+list_coef.S = list()
+coef_dat = NA
 ## Fixed change point using multiple sites a year as multivariate --------- 
 for(i in 1:length(LML.CPUE.w.sec[1,])){
   list_habitats = list()
@@ -122,9 +124,17 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
     try(if(max(M4_sum$coefficients$count[1:2,4]) < .05){
       print(paste(species[i], h))
       print(M4_sum$coefficients$count[2,])
+      coef.dat = c(M4_sum$coefficients$count[2,], colnames(LML.CPUE.w.sec[i]))
     }else{
-      NULL
+      coef.dat = NA
     })
+    
+    if(h == "R"){
+      list_coef.R[[i]] = coef.dat
+    }else{
+      list_coef.S[[i]]= coef.dat
+    }
+    
     # Plots
     
     # Filtering out the data for this species habitat combo
@@ -157,12 +167,28 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
     xlab(paste(species_graph[i], " (",length_graph[i],") ")) +
     theme(text = element_text(size = 14)) 
   
-  print(graph)
+  #print(graph)
   
   
 }
 
+colnames(LML.CPUE.w.sec) 
+coef_dat
 
+coef.names = c("estimate", "stdError", "z_value", "p-value", "ID","HAB_1")
+
+Rcoefs = list_coef.R %>% unlist() %>% na.omit %>% matrix(., ncol = 5, byrow = T) %>% 
+  as.data.frame() %>% mutate(HAB_1 = "R")
+Scoefs = list_coef.S %>% unlist() %>% na.omit %>% matrix(., ncol = 5, byrow = T) %>% 
+  as.data.frame() %>% mutate(HAB_1 = "S")
+
+colnames(Rcoefs) = coef.names
+colnames(Scoefs) = coef.names
+
+coefs.LML = rbind(Rcoefs, Scoefs) %>% as.data.frame()  %>% 
+  mutate(WATER = "LML")%>% 
+  select(WATER, ID, HAB_1, everything())
+coefs.LML
 
 
 ## Final Figure
@@ -186,10 +212,10 @@ LML.v %>%
   #scale_y_log10() + 
   facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels)) +
   scale_fill_manual(values = pal_custom[c(1,2,4,5)],
-                    labels = c("R-Juvenile", # 1 ## These numbers represent the values for the pallete
-                               "S-Juvenile", #3
+                    labels = c(expression("R-Juvenile"^"WS"), # 1 ## These numbers represent the values for the pallete
+                               expression("S-Juvenile"^ "CC, CS, MM"), #3
                                "R-Adult", #5
-                               "S-Adult" #7 
+                               expression("S-Adult"^ "CC, MM") #7 
                                )) + 
   theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
   labs(fill = "Habitat & Age") + 
@@ -201,13 +227,22 @@ LML.v %>%
   scale_color_manual(guide = "none", 
                      values =  pal_custom[c(1,2,4,5)],
                      
-                     labels = c("R-Juvenile", #1 ## These numbers represent the values for the pallete
+                     labels = c(expression("R-Juvenile"^"WS"), #1 ## These numbers represent the values for the pallete
                                 "S-Juvenile", #2
                                 "R-Adult", #3
                                 "S-Adult" #5
                      ))
 
+
+expression(R^Juvenile)
+
+
  ## FBL --------
+
+species_names = c( "creek chub",  "lake trout", "central mudminnow",  "smallmouth bass", "brook trout","white sucker")
+
+
+
 FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
   column_to_rownames(var = "X")
 vec = vector()
@@ -221,7 +256,11 @@ change_points_list = list()
 summary_graph_data = list()
 
 color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), color = c(1:4))
+coef.dat = NA
 
+list_coef.R = list()
+list_coef.S = list()
+list_coef.SW = list()
 ## Fixed change point using multiple sites a year as multivariate --------- 
 for(i in 1:length(FBL.CPUE.w.sec[1,])){
   list_habitats = list()
@@ -268,9 +307,20 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
       print(paste(species[i], h))
       print(M4_sum)
       #print(M4_sum$coefficients$count[2,])
+      coef.dat = c(M4_sum$coefficients$count[2,], colnames(FBL.CPUE.w.sec[i]))
     }else{
-      NULL
+      coef.dat = NA
     })
+    
+    
+    if(h == "RW"){
+      list_coef.R[[i]] = coef.dat
+    } else if(h == "S"){
+      list_coef.S[[i]]= coef.dat
+    } else {
+      list_coef.SW[[i]] = coef.dat
+    }
+    
     
     # Plots
     
@@ -311,6 +361,48 @@ for(i in 1:length(FBL.CPUE.w.sec[1,])){
 }
 
 
+
+coef.names = c("estimate", "stdError", "z_value", "p-value", "ID","HAB_1")
+
+Rcoefs = list_coef.R %>% unlist() %>% na.omit() %>% matrix(., ncol = 5, byrow = T) %>% 
+  as.data.frame() %>% mutate(HAB_1 = "RW")
+Scoefs = list_coef.S %>% unlist() %>% na.omit() %>% matrix(., ncol = 5, byrow = T) %>% 
+  as.data.frame() %>% mutate(HAB_1 = "S")
+SWcoefs = list_coef.SW %>% unlist() %>% na.omit() %>% matrix(., ncol = 5, byrow = T) %>%
+  as.data.frame() %>% mutate(HAB_1 = "SW")
+
+
+colnames(Rcoefs) = coef.names
+colnames(Scoefs) = coef.names
+colnames(SWcoefs) = coef.names
+
+coefs.FBL = rbind(Rcoefs, Scoefs, SWcoefs) %>% as.data.frame()  %>% 
+  mutate(WATER = "FBL")%>% 
+  select(WATER, ID, HAB_1, everything()) 
+coefs.FBL
+
+
+
+## Bind together the coefficient data frames
+
+coefs = rbind(coefs.LML, coefs.FBL) %>%
+  left_join(read.csv("Data/legend.csv"), by = c("ID" = "id")) %>%
+  na.omit() %>%
+  select(WATER, HAB_1, common, age, estimate, stdError, z_value, `p-value`) %>%
+  mutate(z_value = round(as.numeric(z_value), digits = 3),
+         `p-value` = round(as.numeric(`p-value`), digits = 3),
+         stdError = round(as.numeric(stdError), digits = 3),
+         estimate = round(as.numeric(estimate), digits = 3)) %>%
+  mutate(`p-value` = replace(`p-value`, `p-value` <.001, "<.001")) %>%
+  rename(Water = WATER,
+         Habitat = HAB_1, 
+         `Standard Error` = stdError,
+         `Z Value` = z_value, 
+         Common = common, 
+         Age = age,
+         B = estimate) 
+coefs
+write.csv(coefs, row.names = F, file = "Data/Coef.csv")
 ## Final Plots ----------------------
 cp_lines = read.csv("Data/hab_cp.csv") %>% 
   filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% 
@@ -319,7 +411,7 @@ cp_lines = read.csv("Data/hab_cp.csv") %>%
 habs = read.csv("Data/habs.csv") %>%
   select(-X)
 
-labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
+
 FBL_v %>%
   group_by(Year, HAB_1, Species) %>%
   summarize(mean_CPUE = mean(value)) %>%
