@@ -369,3 +369,88 @@ site.hab.table = BEF_data_unfiltered %>%
 
 
 write.csv(file = "Figures_Tables/SiteHabTable.csv", site.hab.table, rownames = F)
+
+BEF_data_unfiltered %>% select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
+  filter( MONTH< 7, WATER == "LML",
+          #YEAR == 2018
+          ) %>% 
+  ggplot(aes(x = LENGTH)) + 
+  geom_histogram() + 
+  facet_wrap(~SPECIES, scales = "free") 
+
+
+install.packages("pracma")
+
+# Load pracma
+install.packages("pracma")
+library(pracma)
+
+# Example vector
+vector <- c(0, 2, 1, 3, 1, 5, 0, 4)
+
+# Find peaks
+peaks <- findpeaks(vector)
+
+print(peaks)  
+
+bin_width = 10
+
+## Length/cohorts
+cc_cohort = BEF_data_unfiltered %>%
+  select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
+  filter( MONTH< 7, WATER == "LML",
+          #YEAR == 2018,
+          SPECIES == "CS") %>%
+  mutate(binned = cut(LENGTH, breaks = seq(min(LENGTH, na.rm =T), max(LENGTH, na.rm =T) + bin_width, by = bin_width))) %>%
+  group_by(binned) %>%
+  summarize(frequency = n()) %>%
+  na.omit()
+
+
+
+cc_cohort
+
+
+peaks = findpeaks(cc_cohort$frequency)
+cc_cohort[peaks[1,4],1]
+
+
+
+## Peak finding for age cohorts 
+
+species = c("CC", "CS","MM","PS","SMB","WS")
+cohort_end = rep(NA,6)
+
+for(i in 1:6){
+  
+  x = BEF_data_unfiltered %>%
+    select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
+    filter( MONTH< 7, WATER == "LML",
+
+            SPECIES == species[i]) %>%
+    mutate(binned = cut(LENGTH, breaks = seq(min(LENGTH, na.rm =T), max(LENGTH, na.rm =T) + bin_width, by = bin_width))) %>%
+    group_by(binned) %>%
+    summarize(frequency = n()) %>%
+    na.omit()
+  
+  peaks = findpeaks(x$frequency)
+  
+  cohort_end[i] = x[peaks[1,4],1] %>% as.character()
+  
+  
+}
+
+cohort_end %>% as.matrix()
+
+
+
+
+
+
+
+
+
+
+
+
+

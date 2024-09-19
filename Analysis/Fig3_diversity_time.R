@@ -2,6 +2,7 @@ library(vegan)
 library(tidyverse)
 library(tidyr)
 library(broom)
+library(wesanderson)
 setwd("C:/users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon")
 CPUE.w.sec = read.csv("Data/CPUE_whole.csv") %>%
   select(-X) %>%
@@ -183,4 +184,9 @@ ratios %>%
     )
   }) %>%
   filter(p_value < .05)
+
+
+
+
+## Size at age
 

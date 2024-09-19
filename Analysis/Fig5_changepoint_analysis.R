@@ -50,12 +50,12 @@ sandy.99 = c(1,4,5)
 rocky.99= c(3,2)
 color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), color = c(1:4))
 
-
+species = c("CC_1", "CC_2", "CS_1", "CS_2", "MM_1", "MM_2", "PS_1", "PS_2", "SMB_1","SMB_2", "WS_1","WS_2")
 list_coef.R = list()
 list_coef.S = list()
 coef.dat = NA
 ## Fixed change point using multiple sites a year as multivariate --------- 
-for(i in 1:length(LML.CPUE.w.sec[1,])){
+for(i in 1:length(species)){
   list_habitats = list()
   for(h in c("S","R")){
     # Set up data frame
@@ -96,8 +96,8 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
     
     # Run changepoint analysis ---------------
     output = e.divisive(as.data.frame(x), 
-                        R = 1000, 
-                        alpha = 2, 
+                        R = 10000, 
+                        alpha = 1, 
                         min.size = 2,
                         sig.lvl = .05)
     
@@ -159,13 +159,13 @@ for(i in 1:length(LML.CPUE.w.sec[1,])){
     ggplot(aes(x = as.numeric(Year), 
                y = value,color = graph_dat$hex)) +
     theme_minimal() + 
-    geom_jitter(color = graph_dat$hex, alpha = .5) +
+    geom_point(color = graph_dat$hex, alpha = .5) +
     facet_wrap(~HAB_1) + 
     theme(axis.text.x = element_text(angle = 90),
           legend.position = "none") + 
     xlim(1998, 2023) +
     ylab(paste("CPUE (indv / hour)")) +
-    xlab(paste(species_graph[i], " (",length_graph[i],") ")) +
+    xlab(paste(species[i], " (",length_graph[i],") ")) +
     theme(text = element_text(size = 14)) 
   
   print(graph)
@@ -216,7 +216,7 @@ LML.v %>%
                     labels = c(expression("R-Juvenile"^"WS"), # 1 ## These numbers represent the values for the pallete
                                expression("S-Juvenile"^ "CC, CS, MM"), #3
                                "R-Adult", #5
-                               expression("S-Adult"^ "CC, MM") #7 
+                               expression("S-Adult"^ "CC") #7 
                                )) + 
   theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
   labs(fill = "Habitat & Age") + 
