@@ -1,3 +1,4 @@
+## Script setup ------------------------
 library(vegan)
 library(MASS)
 library(lme4)
@@ -25,7 +26,7 @@ water_labels = c("FBL" = "First Bisby", "LML" = "Little Moose")
 facet_data = data.frame(WATER = c("FBL", "LML"), 
                         YEAR = c(2003, 2000))
 
-## Alpha diversity of rock habitats 
+## Alpha diversity ---------------------
 
 
 cpue_alphadiv = CPUE.w.sec %>%
@@ -51,6 +52,7 @@ cpue_alphadiv = CPUE.w.sec %>%
   mutate(HAB_1 = as.factor(HAB_1)) %>%
   mutate(HAB_1 = relevel(HAB_1, ref = "SW"))
 
+##
 cpue_alphadiv %>%
   ggplot(aes(x = as.numeric(Year), 
              y = as.numeric(alpha_div), col = HAB_1)) +
@@ -118,7 +120,7 @@ shannon = CPUE.w.sec %>%
   group_by(WATER, Year, HAB_1) %>% 
   select(WATER, Year, SITE_N, HAB_1, diversity,  everything()) %>%
   filter(WATER == "FBL" & Year > 2003 | WATER == "LML" & Year > 2000) %>%
-  filter(WATER == "LML") %>% ## Rewrite this filter to pick one lake or the other for the normality test below. Otherwise comment it out
+  # filter(WATER == "LML") %>% ## Rewrite this filter to pick one lake or the other for the normality test below. Otherwise comment it out
   select(WATER, Year, SITE_N, HAB_1,diversity) %>%
   mutate(sig = case_when(HAB_1 == "RW" & WATER == "FBL" ~ "sig",
                          HAB_1 == "S" & WATER == "FBL" ~ "sig",
@@ -126,7 +128,7 @@ shannon = CPUE.w.sec %>%
                          HAB_1 == "SW" & WATER == "LML" ~ "sig")) %>%
   ungroup() %>%
   mutate(HAB_1 = as.factor(HAB_1)) %>%
-  mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>% ## Only scale for the normality test below. Not for plotting/visualizing
+  # mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>% ## Only scale for the normality test below. Not for plotting/visualizing
   mutate(Year = scale(as.numeric(Year), center = TRUE, scale = FALSE))
 
 shannon %>%
@@ -152,22 +154,24 @@ shannon %>%
 
 
 
-## Normality tests
-cat = lm(shannon$diversity ~ as.numeric(shannon$Year)) %>% summary()
-tidy(cat)$estimate
+## Shannon Diversity Normality tests
 
+#### For the normality tests you have to go back up into `shannon` and remove the # from two lines
 shannon.resid = cpue_alphadiv %>%
   filter(WATER == "FBL", HAB_1 == "S") %>%
   rename(diversity = alpha_div)
-dim(shannon.resid
-    )
+# View the residuals
 hist(shannon.resid$diversity)
 qqnorm(shannon.resid$diversity)
 qqline(shannon.resid$diversity)
+
+## Shapiro-Wilk normality test
 shapiro.test(shannon.resid$diversity)
 
 
 library(lmerTest)
+
+
 shannon_model = lmer(diversity ~ (Year) * HAB_1  + (1 | SITE_N),
                       data = shannon )
 
@@ -180,7 +184,7 @@ shannon.dat = shannon.dat$coefficients %>%
                          `Pr(>|t|)` <= .01 ~ "**",
                          `Pr(>|t|)` <= .05 ~ "*",
                          `Pr(>|t|)` > .05 ~ ""))
-
+### Table S3 --------------
 #write.csv(shannon.dat, file = "Figures_Tables/TemporalDiversityData/Shannon_Model_Coef_FBL.csv")
 
 shannon.slopes = emtrends(shannon_model, ~ HAB_1, var = "Year", delta.var = 1)
@@ -196,7 +200,7 @@ shannon.slopes = summary(shannon.slopes) %>%
 
 #write.csv(shannon.slopes, file = "Figures_Tables/TemporalDiversityData/shannon_slopes_FBL.csv")
 
-### Ratios ----------------------------
+## Ratios ----------------------------
 
 
 
