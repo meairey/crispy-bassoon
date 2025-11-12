@@ -122,7 +122,7 @@ for(i in 1:length(species)){
       mutate(Year = as.numeric(Year)) %>% 
       mutate(Year = scale(Year)[,1])
     
-    try(M4 <- zeroinfl(value_round ~ (Year + SITE) | (Year) + SITE,
+    try(M4 = zeroinfl(value_round ~ (Year + SITE) | (Year) + SITE,
                        dist = 'negbin',
                        data = po_v))
     
@@ -309,7 +309,7 @@ for(i in 1:length(species)){
       mutate(Year = as.numeric(Year)) %>% 
       mutate(Year = scale(Year)[,1])
     
-    try(M4 <- zeroinfl(value_round ~ (Year ) | (Year) ,
+    try(M4 = zeroinfl(value_round ~ (Year ) | (Year) ,
                        dist = 'negbin',
                        data = po_v))
     

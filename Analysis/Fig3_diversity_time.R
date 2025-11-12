@@ -2,21 +2,25 @@ library(vegan)
 library(MASS)
 library(lme4)
 library(tidyverse)
-
 library(broom)
+library(emmeans)
 library(wesanderson)
 setwd("C:/users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon")
+
+## Pull out the CPUE data - contains both FBL and LML
 CPUE.w.sec = read.csv("Data/CPUE_whole.csv") %>%
   select(-X) %>%
   column_to_rownames(var = "rownames")
+
+## Habitat assignments for each site
 habs = read.csv("Data/habs.csv")
 
-CPUE.w.sec
-
-
-pal <- wes_palette("Cavalcanti1", 5, "discrete")
+## Palettes for plotting 
+pal = wes_palette("Cavalcanti1", 5, "discrete")
 
 pal_con = wes_palette("Zissou1", type ="continuous")
+
+# Labels for plotting
 water_labels = c("FBL" = "First Bisby", "LML" = "Little Moose")
 facet_data = data.frame(WATER = c("FBL", "LML"), 
                         YEAR = c(2003, 2000))
@@ -66,15 +70,13 @@ cpue_alphadiv %>%
 
 ## Temporal alpha diversity per site 
 
-## Count data like for a species richness curve should be modeled with poisson or negative binomials because theyre discrete integars (count) and not continuous
 cpue_alphadiv.dat = cpue_alphadiv %>%
   ungroup() %>%
- # mutate(Year = as.numeric(Year)-2000)
   mutate(Year = as.vector(scale(as.numeric(Year), center = TRUE, scale = FALSE))) %>% 
   filter(WATER == "FBL")
 
 
-pois_model <- glmer(alpha_div ~ as.numeric(Year) * HAB_1 +  (1 | SITE_N), family = poisson, data = cpue_alphadiv.dat )
+pois_model = glmer(alpha_div ~ as.numeric(Year) * HAB_1 +  (1 | SITE_N), family = poisson, data = cpue_alphadiv.dat )
 AIC(pois_model)
 sum_alpha = summary(pois_model)
 
@@ -90,8 +92,6 @@ sum_alpha = sum_alpha$coefficients %>% as.data.frame() %>%
 
 #write.csv(sum_alpha, "Figures_Tables/TemporalDiversityData/AlphaDiv_summary_FBL.csv")
 #write.csv(sum_alpha, "Figures_Tables/TemporalDiversityData/AlphaDiv_summary_LML.csv")
-
-library(emmeans)
 
 slopes = emtrends(pois_model, ~ HAB_1, var = "Year", delta.var = 1)
 slopes = summary(slopes) %>%
@@ -118,7 +118,7 @@ shannon = CPUE.w.sec %>%
   group_by(WATER, Year, HAB_1) %>% 
   select(WATER, Year, SITE_N, HAB_1, diversity,  everything()) %>%
   filter(WATER == "FBL" & Year > 2003 | WATER == "LML" & Year > 2000) %>%
-  filter(WATER == "LML") %>%
+  filter(WATER == "LML") %>% ## Rewrite this filter to pick one lake or the other for the normality test below. Otherwise comment it out
   select(WATER, Year, SITE_N, HAB_1,diversity) %>%
   mutate(sig = case_when(HAB_1 == "RW" & WATER == "FBL" ~ "sig",
                          HAB_1 == "S" & WATER == "FBL" ~ "sig",
@@ -126,7 +126,7 @@ shannon = CPUE.w.sec %>%
                          HAB_1 == "SW" & WATER == "LML" ~ "sig")) %>%
   ungroup() %>%
   mutate(HAB_1 = as.factor(HAB_1)) %>%
-  mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>%
+  mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>% ## Only scale for the normality test below. Not for plotting/visualizing
   mutate(Year = scale(as.numeric(Year), center = TRUE, scale = FALSE))
 
 shannon %>%
@@ -168,7 +168,7 @@ shapiro.test(shannon.resid$diversity)
 
 
 library(lmerTest)
-shannon_model <- lmer(diversity ~ (Year) * HAB_1  + (1 | SITE_N),
+shannon_model = lmer(diversity ~ (Year) * HAB_1  + (1 | SITE_N),
                       data = shannon )
 
 
@@ -181,7 +181,7 @@ shannon.dat = shannon.dat$coefficients %>%
                          `Pr(>|t|)` <= .05 ~ "*",
                          `Pr(>|t|)` > .05 ~ ""))
 
-write.csv(shannon.dat, file = "Figures_Tables/TemporalDiversityData/Shannon_Model_Coef_FBL.csv")
+#write.csv(shannon.dat, file = "Figures_Tables/TemporalDiversityData/Shannon_Model_Coef_FBL.csv")
 
 shannon.slopes = emtrends(shannon_model, ~ HAB_1, var = "Year", delta.var = 1)
 
@@ -192,7 +192,9 @@ shannon.slopes = summary(shannon.slopes) %>%
          SE = round(SE, digits = 2)) %>%
   select(-df) %>%
   mutate(cred = paste("[", lower.CL, ", ", upper.CL, "]", sep = ""))
-write.csv(shannon.slopes, file = "Figures_Tables/TemporalDiversityData/shannon_slopes_FBL.csv")
+
+
+#write.csv(shannon.slopes, file = "Figures_Tables/TemporalDiversityData/shannon_slopes_FBL.csv")
 
 ### Ratios ----------------------------
 
@@ -262,7 +264,7 @@ norm_test = ratios %>%
 
 ## Use log model only if doing gaussian model family 
 #library(lmerTest)
-log_model <- lmer(native_ratio ~ Year * HAB_1 + (1 | SITE_N),
+log_model = lmer(native_ratio ~ Year * HAB_1 + (1 | SITE_N),
                   data = norm_test)
 summary(log_model)
 

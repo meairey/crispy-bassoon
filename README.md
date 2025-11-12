@@ -2,7 +2,9 @@
 
 ![image of a smallmouth bass](https://github.com/meairey/literate-potato/blob/main/Graphics/SMB_image.jpg?raw=true)
 
-Patchy habitats create patchy responses of native fish communities to the removal of an invasive predator 
+Patchy habitats create patchy responses of native fish communities to the removal of an invasive predator
+
+
 Airey et al., in prep 
 
 ## Overview
@@ -21,12 +23,17 @@ The `Analysis` folder contains the `.R` script for generating changepoints and r
 
 # Requirements
 
-This is primarily conducted through the use of a change point analysis through the package `ecp` and a zero-inflated regression through the package `pscl`. Additionally, habitat associations are assessed through a CCA analysis and the package `vegan`.
+Analyses use of a change point analysis through the package `ecp` and a zero-inflated regression through the package `pscl`. Additionally, habitat associations are assessed through a CCA analysis and the package `vegan`.
 
-`install.packages(c("ggplot2", "tidyverse", "ecp", "pscl", "vegan", "gridExtra", "ggrepel"))`
+`install.packages(c("ggplot2", "tidyverse", "ecp", "pscl", "vegan", "gridExtra", "ggrepel", "mass", "lme4", "wesanderson", "broom", "emeans"))`
 
 # Results Summary
 
+* Juvenile overcompensation by a non-native predator is negatively associated with abundances of small-bodied fishes
+
+* The larger, more heterogeneous lake supports greater spatial partitioning between natives and the juveniles of the non-native predator
+
+* Changes in the community composition across sediment habitats were more stable through time, suggesting that these habitats may buffer natives from the cobble-prefering bass
 
 Below is an example of the summary results of the change point analysis. 
 

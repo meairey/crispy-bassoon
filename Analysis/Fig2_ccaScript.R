@@ -3,6 +3,7 @@ library(tidyverse)
 library(gridExtra)
 library(vegan)
 library(ggrepel)
+library(cluster)
 
 ## LML ------
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
@@ -15,45 +16,30 @@ env_updated.lml = read.csv("Data/CCA_data/LML_habitat.csv")  %>%
 
 
 
-
-v.lml = LML.CPUE.w.sec  %>%
+## Filter out the LML data and prep the frame for next step
+data.lml = LML.CPUE.w.sec  %>%
   mutate(y_s = rownames(LML.CPUE.w.sec)) %>%
   pivot_longer(1:WS_2,
                names_to = "Species") %>%
   separate(y_s, 
            into = c("Year", "SITE_N"), sep = "_") %>% 
-  #mutate(value = value * 60 ) %>%
   filter(SITE_N %in% c(env_updated.lml$SITE_N)) %>%
   group_by(Year, SITE_N,  Species) %>%
   summarize(value = median(value))  %>%
   left_join(env_updated.lml) %>%
   mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002 & Year > 2000)  %>% ## take medians just to try
-  
+  filter(Year != 2002 & Year > 2000)  %>% 
   pivot_wider(names_from = Species, values_from = value)
 
-
-
-### Trying to include some of the actual data
-
-
-data.lml = v.lml 
-
-
-data_com.lml = data.lml %>% 
-  #select(veg_emerg:wood_fine, CC_1, CC_2) %>%
-  filter(CC_1 + CC_2 +
-           CS_1 + CS_2 +
+## Filter out sites/years with the species/size classes of interest
+data_com.lml = data.lml %>% ## This preserves the SMB CPUE for data_env.lml
+  filter(CC_1 + CC_2 + ## Filter out the species we want to look at
+           CS_1 + CS_2 + ## Can't include sites that don't include any of the species of interest
            PS_1 + PS_2 +
            WS_1 + WS_2 +
            MM_1 + MM_2 > 0) 
 
-#select(BB_1:WS_2) %>%
-
-
-
-
-
+## Environmental data for LML analysis
 data_env.lml = data_com.lml %>%
   ungroup() %>%
   select(SMB_1, SMB_2, SITE_N, 
@@ -64,13 +50,13 @@ data_env.lml = data_com.lml %>%
   separate(SITE_N, into = c("GEAR", "WATER", "SITE_N")) %>%
   mutate(SITE_N = as.numeric(SITE_N))
 
-
+## select out just the species of interest for the community frame in the CCA
 data_com.lml = data_com.lml %>% ungroup() %>% select(CC_1, CC_2, CS_1, CS_2, MM_1, MM_2,
                                              WS_1, WS_2,
                                              PS_1, PS_2)
 
-
-cca_model.lml = cca(data_com.lml ~ 
+## Run the CCA for LML using both habitat explanations and SMB CPUE
+cca_model.lml = cca(data_com.lml ~ ## Below are all the columns selected as explanatory variables
                   SMB_2 + 
                   SMB_1 +
                   Year  +
@@ -81,18 +67,14 @@ cca_model.lml = cca(data_com.lml ~
                   EV +
                   FW + 
                   O +
-                  #S +
-                  #SITE_N +
                   SV,
                 data = data_env.lml)
 
-print(cca_model.lml)
-
-
+print(cca_model.lml) ## print model result
 
 
 # Extract species scores
-species_scores.lml <- scores(cca_model.lml, display = "species") %>% 
+species_scores.lml = scores(cca_model.lml, display = "species") %>% 
   as.data.frame() %>%
   rownames_to_column(var = "id") %>% 
   left_join(read.csv("Data/legend.csv")) %>%
@@ -100,17 +82,17 @@ species_scores.lml <- scores(cca_model.lml, display = "species") %>%
   mutate(common = tolower(common)) %>%
   rename(ID = common) %>%
   mutate(ID = str_replace(ID, " ","~")) 
-# Extract site scores
-site_scores.lml <- scores(cca_model.lml, display = "sites")
 
-# cca_mo
+# Extract site scores
+site_scores.lml = scores(cca_model.lml, display = "sites")
+
+# Pull out vectors for plotting
 vectors.lml = summary(cca_model.lml)[4]$biplot %>% as.data.frame() %>% 
   mutate(ID = rownames(.)) %>%
   mutate(ID = c("bold((J)~SMB)", "bold((A)~SMB)", "bold(Year)","bold(Boulders)", "bold(Cobbles)", "bold(CWD)", "bold(Emergent~veg)", "bold(FWD)", "bold(Organic~debris)","bold(Submerged~veg)")) %>%
   select(ID, CCA1, CCA2) %>%
   mutate(CCA1 = CCA1 * 1.5, 
          CCA2 = CCA2 * 1.5)
-
 
 cca_graph.LML = vectors.lml %>% 
   mutate(age_code = NA) %>%
@@ -121,7 +103,7 @@ cca_graph.LML = vectors.lml %>%
 
 
 # Extract eigenvalues
-eigenvalues.lml <- eigenvals(cca_model.lml) %>% 
+eigenvalues.lml = eigenvals(cca_model.lml) %>% 
   as.data.frame() %>%
   rename("value" = "x")%>%
   rownames_to_column(var = "rowname") 
@@ -147,34 +129,17 @@ eig.sum = data.frame(CCA1 = CCA1, CCA2 = CCA2, CCA3 = CCA3, CCA4 = CCA4)
 sum.table.lml = rbind(eig.sum, scores(cca_model.lml,  choices = 1:4)$biplot,
       scores(cca_model.lml, choices = 1:4)$species)
 ## Write table - there is also a cleaned excel workbook with table formating in the Tables_Figures folder in crispy_bassoon
-write.csv(sum.table.lml,"Data/CCA.lml.csv")
+#write.csv(sum.table.lml,"Data/CCA.lml.csv")
 
 
 
 ## Scree/Elbow plot
 
 
-ggplot(mapping = aes( x = c(1:9), y = eigenvalues.lml[1:9,"value"])) + geom_line() +
+ggplot(mapping = aes( x = c(1:9), y = eigenvalues.lml[1:9,"value"])) + 
+  geom_line() + geom_point() +
   xlab("CCA Axis") + ylab("Eigen Value") +
   theme_minimal(base_size = 14)
-
-
-kmeans_result <- kmeans(data, centers = k, nstart = 25)
-
-
-silhouette_scores <- silhouette(kmeans_result$cluster, dist(data))
-
-plot(silhouette_scores, col = 1:k)
-
-sil_widths <- numeric()
-
-for (k in 2:10) {
-  kmeans_result <- kmeans(data, centers = k, nstart = 25)
-  sil <- silhouette(kmeans_result$cluster, dist(data))
-  sil_widths[k] <- mean(sil[, 3]) # Average silhouette width
-}
-
-plot(2:10, sil_widths[2:10], type = "b", xlab = "Number of clusters", ylab = "Average silhouette width")
 
 # FBL -----------------------------
 
@@ -203,12 +168,7 @@ v.fbl = FBL.CPUE.w.sec %>%
   mutate(value = value * 60 * 60 ) %>%
   filter(Year != 2002 & Year > 2004)
 
-m = cor(env_updated.fbl %>% select(-SITE_N, -X))
 
-library(corrplot)
-m = cor(env_updated.lml %>% select(-SITE_N, -X, -B, -G, -R, -BED,-S))
-testRes = cor.mtest(env_updated.fbl %>% select(-SITE_N, -X, -B, -G, -R, -BED,-S), conf.level = 0.95)
-corrplot(m)
 
 ## Load in data from CPUE_hab.Rmd file
 data.fbl = v.fbl %>% ## Used for changepoints graph
@@ -241,10 +201,7 @@ data_env.fbl = data_com.fbl %>%
 data_com.fbl = data_com.fbl %>% ungroup() %>% select(CC_1, CC_2, 
                                              MM_1, MM_2,
                                              WS_1, WS_2)
-
-## Maybe slope gradient of the shoreline? Proximity to deep water
-## Depth, proximity to tribs? Or known groundwater seeps?
-## Proximity to camps?
+## Run the CCA for FBL
 cca_model.fbl = cca(data_com.fbl ~ 
                   Year +
                   SMB_2 + 
@@ -256,15 +213,13 @@ cca_model.fbl = cca(data_com.fbl ~
                   EV +
                   FW + 
                   O +
-                  #S +
                   SV,
                 data = data_env.fbl)
 
 
-#summary(cca_model.fbl)
 print(cca_model.fbl)
 
-cca_result.fbl <- cca_model.fbl
+cca_result.fbl = cca_model.fbl
 
 # Extract species scores
 species_scores.fbl = scores(cca_result.fbl, display = "species")  %>% 
@@ -274,14 +229,12 @@ species_scores.fbl = scores(cca_result.fbl, display = "species")  %>%
   select(common, CCA1, CCA2,age_code) %>%
   mutate(common = tolower(common)) %>%
   rename(ID = common) %>%
-  mutate(ID = str_replace(ID, " ","~")) # %>%
- # unite("ID",c(age1, scientific), sep = " " )
+  mutate(ID = str_replace(ID, " ","~")) 
 
 # Extract site scores
-site_scores.fbl <- scores(cca_result.fbl, display = "sites")
+site_scores.fbl = scores(cca_result.fbl, display = "sites")
 
-# cca_mo
-
+# Pull out CCA vectors for plotting
 vectors.fbl = summary(cca_model.fbl)[4]$biplot %>% as.data.frame() %>% 
   mutate(ID = rownames(.)) %>%
   mutate(ID = c( "bold(Year)",  "bold((A)~SMB)", "bold((J)~SMB)",
@@ -290,23 +243,15 @@ vectors.fbl = summary(cca_model.fbl)[4]$biplot %>% as.data.frame() %>%
   select(ID, CCA1, CCA2) %>%
   mutate(CCA1 = CCA1 * 1.5, 
          CCA2 = CCA2 * 1.5)
-
-
-
-
-species_scores.fbl = species_scores.fbl #%>% 
-  mutate(ID = paste0("italic(", gsub(" ", "~", scientific), ")")) %>%
-  select( ID,CCA1, CCA2, age_code)
-
+ 
+## Bind together the vectors and species scores for plotting
 cca_graph.fbl = vectors.fbl %>% 
   mutate(age_code = NA) %>%
   rbind(species_scores.fbl) %>%
   mutate(WATER = "FBL") 
 
-
-
 # Extract eigenvalues
-eigenvalues.fbl <- eigenvals(cca_model.fbl) %>% 
+eigenvalues.fbl = eigenvals(cca_model.fbl) %>% 
   as.data.frame() %>%
   rename("value" = "x")%>%
   rownames_to_column(var = "rowname") 
@@ -335,7 +280,7 @@ sum.table.fbl = rbind(eig.sum, scores(cca_model.fbl,  choices = 1:4)$biplot,
 #write.csv(sum.table.fbl,"Data/CCA.fbl.csv")
 
 
-## Plotting the two together ----------------
+## Plotting ----------------
 
 cca_graph = rbind(cca_graph.fbl, cca_graph.LML) ## Bind together the two individual data frames
 
