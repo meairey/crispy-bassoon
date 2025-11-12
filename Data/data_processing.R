@@ -30,6 +30,10 @@ source("../AFRP/AFRP_Master_Code/AFRP_Functions.R")
 sample = sample %>% mutate(SITE_N = str_replace(SITE_N, "BEF.FBL.003,4", 
                                                 "BEF.FBL.003"))
 
+sample %>% filter(MONTH > 8, WATER == "LML", GEAR_CODE == "NAF") %>%
+  select(YEAR) %>%
+  unique()
+
 
 ## Contain the catch data for each sampling event
 BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
@@ -38,8 +42,34 @@ BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
          GEAR_CODE == "NAF") %>%
   filter(MONTH %in% c(5,6,7)) ## Filter to just sample the spring period of sampling
 
+BEF_data_unfiltered %>% filter(WATER == "LML", GEAR_CODE == "NAF", 
+                               SPECIES == "CC", LENGTH > 100,  MONTH < 7) %>%
+  group_by(YEAR) %>%
+  summarize(cat = n()) -> dog
+
+
+BEF_data_unfiltered %>%
+  group_by(WATER) %>%
+  select(YEAR, SPECIES) %>%
+  filter(SPECIES == "RT") %>%
+  slice_min(YEAR)
+  summarize(cat = length(unique(SPECIES)),
+            dog = unique(SPECIES)) %>%
+  print(n = 28)
 
 rare_threashold = 50 ## To filter out rare taxa
+
+
+### SMB Age/Size 
+
+read.csv("Data/FISH_AGE_GROWTH.csv") %>% left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
+  left_join(sample) %>%
+  filter(MONTH < 8) %>%
+  select(LENGTH, AGE_FISH_N, MONTH, YEAR) %>% 
+  summarize(mean = mean(LENGTH, na.rm =T),
+            min = min(LENGTH, na.rm = T), ## Mean SMB age 1 = 117, min 53
+            max = max(LENGTH, na.rm = T),
+            med = median(LENGTH, na.rm = T))
 
 ## Habitat info 
 ## iMPORTANT TO TAKE OUT OF CRIPSY-BASSOON REPOSITORY
@@ -59,7 +89,7 @@ rare = BEF_data_unfiltered %>% group_by(WATER, SPECIES) %>%
   filter(frequency < rare_threashold)
 stocked = c("LLS", "RT") ## Stocked fish in little moose
 remove = c(stocked,  "LT", "RS","RWF") ## Remove stocked taxa, and pelagic taxa that we're not focusing on
-
+remove = "cat"
 # Define Boat electrofishing data with target taxa only
 BEF_data = BEF_data_unfiltered %>%
   left_join(rare) %>% ## Join rare data frame
@@ -125,8 +155,14 @@ LML.habs = read.csv("Data/updated_habitat.csv") %>%
 
 ## Intermediate to go into LML.CPUE.w.sec
 LML_data = LML_data_unfiltered %>% filter(SPECIES %nin% remove) %>% 
-  mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)), ## Length break is 100 mm
-                            SPECIES %in% c("MM","SS") ~.bincode(LENGTH, breaks = c(0,50,8000)))) %>%
+  mutate(LENGTH = case_when(SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,55,8000)),
+                            SPECIES %in% c("CS") ~ .bincode(LENGTH, breaks = c(0,70,80000)),
+                            SPECIES %in% c("PS") ~ .bincode(LENGTH, breaks = c(0,70,80000)),
+                            SPECIES %in% c("WS") ~ .bincode(LENGTH, breaks = c(0,100,80000)),
+                            SPECIES %in% c("SMB") ~ .bincode(LENGTH, breaks = c(0,105,80000)),
+                            SPECIES %in% c("CC") ~ .bincode(LENGTH, breaks = c(0,70,80000)),
+                            SPECIES %in% c("ST","LLS","RT","LT") ~ .bincode(LENGTH, breaks = c(0,70,80000)))) %>%
+  
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
   mutate(SITE = as.numeric(SITE)) %>%
@@ -235,13 +271,18 @@ FBL_data_unfiltered = BEF_data_unfiltered %>% filter(WATER == "FBL")
 
 c.h.FBL = habs%>% filter(WATER == "FBL")
 
+## Remove this line after
+remove = c("LLS", "RT","RS","RWF")
 
 
 FBL_data = FBL_data_unfiltered %>% 
   filter(SPECIES %nin% remove) %>% 
-  mutate(LENGTH = case_when(SPECIES %nin% c("MM","SS") ~ .bincode(LENGTH, breaks = c(0,100,8000)),
+  mutate(LENGTH = case_when(SPECIES %in% c("SMB") ~ .bincode(LENGTH, breaks = c(0,100,8000)),
+                            
                             SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,50,8000)),
-                            SPECIES %in% c("SS") ~.bincode(LENGTH, breaks = c(0,25,8000))))%>%
+                            SPECIES %in% c("CC") ~ .bincode(LENGTH, breaks = c(0,60,80000)),
+                            SPECIES %in% c("LT") ~ .bincode(LENGTH, breaks = c(0,100,100000)),
+                            SPECIES %in% c("WS") ~.bincode(LENGTH, breaks = c(0,100,8000))))%>%
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
   left_join(c.h.FBL) %>%
@@ -276,7 +317,8 @@ length_graph = rep(c("< 100 mm", "> 100 mm"), length(species_names.FBL))
 
 FBL_v = FBL.CPUE.w.sec %>% 
   mutate(y_s = rownames(FBL.CPUE.w.sec)) %>%
-  pivot_longer(1:length(species.FBL),
+  select(y_s, everything()) %>%
+  pivot_longer(2:(length(species.FBL)+1),
                names_to = "Species") %>%
   separate(y_s, 
            into = c("Year", "SITE_N"), sep = "_") %>%
@@ -286,11 +328,21 @@ FBL_v = FBL.CPUE.w.sec %>%
         sep = "_", 
         remove = F) %>%
   rename(HAB_1 = Habitat) %>%
-  mutate(value = value * 60 * 60 ) #%>%
-  #filter(Year != 2002)
+  mutate(value = value * 60 * 60 ) %>%
+  filter(Year != 2002)
 
 save(file = "../crispy-bassoon/Data/ChangePoint_Data/FBL_v.RData", FBL_v)
 
+
+## Looking at sites 7/8 like Kurt suggested...
+
+
+FBL_v %>%
+  group_by(SITE_N) %>%
+  filter(Species == "SMB_1") %>%
+  summarize(mean(value)) %>%
+  print(n = 15)
+site_hab[c(1:15),]
 
 
 

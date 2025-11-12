@@ -42,6 +42,9 @@ cumulative.abund = v.combined %>%
 
 ## Cumulative abundance
 labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
+labels.si = c("CC"="S. atromaculatus", "CS" = "L. cornutus", "MM" = "U. limi", "PS" = "L. gibbosus", "SMB" = "M. dolomieu", "WS" = "C. commersonii")
+
+
 cumulative.abund %>% 
   ungroup() %>% 
   group_by(WATER, SP) %>%
@@ -56,7 +59,7 @@ cumulative.abund %>%
   ggplot(aes(x = proportion_sites, y = cum, col = WATER)) + 
   theme_minimal() + 
   geom_line(lwd = 1) + 
-  facet_wrap(~SP, labeller = labeller(SP = labels)) + 
+  facet_wrap(~SP, labeller = labeller(SP = labels.si)) + 
   ylab("Cummulative Percent of Abundance") +
   xlab("Percent of Sites Sampled") +
   scale_color_manual("Lake", labels = c("First Bisby","Little Moose"), values = c("#91bab6","#E79805"))

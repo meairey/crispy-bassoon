@@ -23,7 +23,8 @@ change_points_list = list()
 pal_con = wes_palette("Zissou1", type ="continuous")
 cat = wes_palette("Zissou1", type ="discrete")
 
-labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
+labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudminnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
+labels.si = c("CC"="S. atromaculatus", "CS" = "L. cornutus", "MM" = "U. limi", "PS" = "L. gibbosus", "SMB" = "M. dolomieu", "WS" = "C. commersonii")
 
 pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
 
@@ -38,8 +39,8 @@ LML.habs = LML.v %>% select(Year, SITE, HAB_1) %>%
 
 ## For little moose remove the woody designations
 LML.v = LML.v %>% 
-  mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
-  mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
+ mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
+ mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
 
 
@@ -50,10 +51,18 @@ sandy.99 = c(1,4,5)
 rocky.99= c(3,2)
 color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), color = c(1:4))
 
+
+LML.v %>% 
+  filter(HAB_1 == "R")
+
 species = c("CC_1", "CC_2", "CS_1", "CS_2", "MM_1", "MM_2", "PS_1", "PS_2", "SMB_1","SMB_2", "WS_1","WS_2")
 list_coef.R = list()
 list_coef.S = list()
 coef.dat = NA
+
+## remove this this is just to look at other species
+
+species = (LML.v$Species %>% unique())
 ## Fixed change point using multiple sites a year as multivariate --------- 
 for(i in 1:length(species)){
   list_habitats = list()
@@ -211,15 +220,17 @@ LML.v %>%
   geom_area(position = "identity", alpha = .00001, size = 1)+ 
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   #scale_y_log10() + 
-  facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels)) +
+  facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels.si), ncol = 2) +
   scale_fill_manual(values = pal_custom[c(1,2,4,5)],
-                    labels = c(expression("R-Juvenile"^"WS"), # 1 ## These numbers represent the values for the pallete
-                               expression("S-Juvenile"^ "CC, CS, MM"), #3
+                    labels = c(expression("R-Juvenile"), # 1 ## These numbers represent the values for the pallete
+                               expression("S-Juvenile"), #3
                                "R-Adult", #5
-                               expression("S-Adult"^ "CC") #7 
+                               expression("S-Adult") #7 
                                )) + 
-  theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
-  labs(fill = "Habitat & Age") + 
+  theme(axis.text.x = element_text(angle= 90, vjust = .5),
+        legend.position = "bottom", 
+        legend.title = element_blank()) +
+  #labs(fill = "Habitat & Age") + 
   xlab("") + 
   ylab("CPUE (ind/hour)") +
   geom_vline(aes(xintercept = 2000), col = "black", linetype = 1, size = .5) + 
@@ -248,8 +259,8 @@ FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>%
   column_to_rownames(var = "X")
 vec = vector()
 p.val = vector()
-species = colnames(FBL.CPUE.w.sec)[c(-3,-4) ]
-
+species = colnames(FBL.CPUE.w.sec)[c(-3,-4, -9,-10) ]
+species = colnames(FBL.CPUE.w.sec)[c(-3) ]
 load("Data/ChangePoint_Data/FBL_v.RData")
 
 change_points_list = list()
@@ -429,7 +440,7 @@ FBL_v %>%
   theme(strip.background = element_blank()) +
   geom_area(alpha = .00009, position = 'identity' , size = 1) +
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
-  facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels)) +
+  facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels.si)) +
   scale_fill_manual(values = pal_custom[1:6],
                     labels = c("RW-Juvenile",
                                "S-Juvenile",
@@ -437,12 +448,14 @@ FBL_v %>%
                                "RW-Adult",
                                "S-Adult",
                                "SW-Adult")) + 
-  theme(axis.text.x = element_text(angle= 90, vjust = .5)) +
-  labs(fill = "Habitat & Age") + 
+  theme(axis.text.x = element_text(angle= 90, vjust = .5), 
+        legend.position = "bottom", 
+        legend.title = element_blank()) +
+  #labs(fill = "Habitat & Age") + 
   xlab("") + 
   ylab("CPUE (ind/hour)") + 
   geom_vline(aes(xintercept = 2003)) + 
-  geom_vline(aes(xintercept = (YEAR), color =  interaction(Habitat, AGE)), data = cp_lines, linetype = 2, size = .5)  +
+  geom_vline(aes(xintercept = (YEAR), color =  interaction(Habitat, AGE)), data = cp_lines , linetype = 2, size = .5)  +
   scale_color_manual(guide = "none", 
                      values = pal_custom,
                      labels = c("RW-Juvenile",
@@ -458,5 +471,27 @@ FBL_v %>%
 
 
 
+## Checking what percent lower the FBL populations were by the end of the study
 
+## LML before after change
+LML.v %>%
+  na.omit() %>% 
+  separate(Species, into = c("Species", "age")) %>%
+  filter(Year %in% c(1998, 1999, 2000, 2019, 2021, 2022)) %>%
+  mutate(period = case_when(Year %in% c(1998, 1999, 2000) ~ "pre", 
+                            Year %in% c(2019:2022) ~ "post")) %>%
+  group_by(Year, Species, period) %>%
+  summarize(year.sum = sum(value)) %>%
+  ungroup() %>%
+  group_by(Species, period) %>%
+  summarize(year.average = mean(year.sum)) %>%
+  ungroup() %>%
+  arrange( Species, rev(period)) %>%
+  group_by(Species) %>%
+  mutate(decreased = ((year.average - lag(year.average)) / lag(year.average))*100) %>% 
+  na.omit() %>%
+  ungroup() %>% 
+  summarize(range(decreased))
+
+  
 
