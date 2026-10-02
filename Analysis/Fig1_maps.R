@@ -119,6 +119,13 @@ ggplot() +
   scale_x_continuous(labels = scales::number_format(accuracy = 0.001)) +
   scale_y_continuous(labels = scales::number_format(accuracy = 0.001))
 
+
+
+
+
+
+
+
 ## Col mapping to match temporal diversity figures 
 col_join = data.frame(labels = c("Rock", "Wood + Rock",
                                 "Fine Sediment","Wood + Fine Sediment"),

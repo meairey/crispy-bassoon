@@ -53,7 +53,7 @@ cpue_alphadiv = CPUE.w.sec %>%
   mutate(HAB_1 = relevel(HAB_1, ref = "SW"))
 
 ##
-cpue_alphadiv %>%
+alpha_graph = cpue_alphadiv %>%
   ggplot(aes(x = as.numeric(Year), 
              y = as.numeric(alpha_div), col = HAB_1)) +
   geom_jitter(alpha = .2) + 
@@ -67,7 +67,6 @@ cpue_alphadiv %>%
   labs(col = "Habitat") + 
   ylab("Alpha Diversity") +
   xlab("Year")
-
 
 
 ## Temporal alpha diversity per site 
@@ -108,7 +107,6 @@ slopes = summary(slopes) %>%
 
 ## Shannon Diversity ----------------------
 shannon = CPUE.w.sec %>% 
-  
   mutate(diversity = diversity(., index = "shannon")) %>%
   rownames_to_column(var = "Site") %>% 
   separate(Site, into = c("Year", "SITE_N"), sep = "_") %>%
@@ -127,27 +125,32 @@ shannon = CPUE.w.sec %>%
                          HAB_1 == "SW" & WATER == "FBL" ~ "sig",
                          HAB_1 == "SW" & WATER == "LML" ~ "sig")) %>%
   ungroup() %>%
-  mutate(HAB_1 = as.factor(HAB_1)) %>%
+  mutate(HAB_1 = as.factor(HAB_1) )%>%
+  mutate(sig = case_when(sig == "sig" ~ "sig", is.na(sig) ~ "znot")) %>% 
+  mutate(WATER = factor(WATER, levels = c( "LML","FBL"))) # %>%
   # mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>% ## Only scale for the normality test below. Not for plotting/visualizing
   mutate(Year = scale(as.numeric(Year), center = TRUE, scale = FALSE))
 
-shannon %>%
+shannon_graph = shannon %>%
   filter(Year > 1998, HAB_1 != "NA") %>%
   ggplot(aes(x = as.numeric(Year),
              y = diversity,
-             col = HAB_1),
+             col = HAB_1, 
+             linetype = sig),
          key_glyph = "rect") + 
   geom_jitter(alpha = .2) + 
-  geom_vline(data = facet_data, aes(xintercept =YEAR), linetype = 2) +
+  geom_vline(data = facet_data %>%
+               mutate(WATER = factor(WATER, levels = c("LML", "FBL"))), aes(xintercept =YEAR), linetype = 2) +
   geom_smooth(method = lm, se = F) + 
   theme_minimal(base_size = 14) + 
-  ylab("Shannon Diversity Index") + 
+  ylab("Shannon Diversity") + 
   xlab("Year") + 
   labs(col = "Habitat") + 
-  scale_color_manual(labels = c("Rock","Wood + Rock","Fine Sediment",
-                                "Wood + Fine Sediment"), 
+  scale_color_manual(labels = c("Rock","Rock + Wood","Sediment",
+                                "Sediment + Wood"), 
                      values = pal[1:4] ) +
-  facet_wrap(~WATER, labeller = labeller(WATER = water_labels))
+  facet_wrap(~WATER, labeller = labeller(WATER = water_labels)) +
+  guides(linetype = "none")
 
 
 
@@ -228,26 +231,35 @@ ratios = CPUE.w.sec %>%
   mutate(sig = case_when(HAB_1 == "RW" & WATER == "FBL" ~ "sig",
                          HAB_1 == "S" & WATER == "FBL" ~ "sig",
                          HAB_1 == "SW" & WATER == "FBL" ~ "sig",
-                         HAB_1 == "SW" & WATER == "LML" ~ "sig"))
-
-
-
-ratios %>% 
+                         HAB_1 == "SW" & WATER == "LML" ~ "sig")) %>%
+  mutate(sig = case_when(sig == "sig" ~ "sig", is.na(sig) ~ "znot")) %>% 
+  mutate(WATER = factor(WATER, levels = c( "LML","FBL"))) %>% 
   mutate(Year = as.numeric(Year)) %>%
-  filter(HAB_1 != "NA") %>%
+  filter(HAB_1 != "NA") 
+
+
+ratios_graphs = ratios   %>%
   ggplot(aes( x = as.numeric(Year), y = native_ratio, col = HAB_1)) + 
   theme_minimal(base_size = 14) + 
   geom_point(alpha = .3) + 
   geom_smooth(aes(linetype = sig),method = 'lm', se = F) +
-  geom_vline(data = facet_data, aes(xintercept =YEAR), linetype = 2) +
-  scale_color_manual(labels = c("Rock", "Wood + Rock",
-                                "Fine Sediment","Wood + Fine Sediment"),
+  geom_vline(data = facet_data %>% 
+               mutate(WATER = factor(WATER, levels = c("LML", "FBL"))), aes(xintercept =YEAR), linetype = 2) +
+  scale_color_manual(labels = c("Rock", "Rock + Wood",
+                                "Sediment","Sediment + Wood"),
                      values = pal[1:4] ) + 
   xlab("Year") + 
-  ylab("Ratio Native:Bass") + 
+  ylab("log(Ratio Native:Bass)") + 
   labs(col = "Habitat") + 
-  facet_wrap(~WATER, labeller = labeller(WATER = water_labels)) +
-  scale_y_log10()
+  facet_wrap(~WATER, labeller = labeller(WATER = c("LML"="Little Moose", "FBL" = "First Bisby"))) +
+  scale_y_log10() + 
+  guides(linetype = "none")
+
+
+### Figure 3 combination of all 3 graphs
+
+alpha_graph / shannon_graph / ratios_graphs 
+
 
 ## Are data normally distributed 
 ratios %>%
@@ -288,7 +300,7 @@ log_model.dat = (summary(log_model))$coefficients %>%
                          `Pr(>|t|)` > .05 ~ ""))
 
 
-write.csv(log_model.dat, "Figures_Tables/TemporalDiversityData/ratio_summary_LML.csv")
+#write.csv(log_model.dat, "Figures_Tables/TemporalDiversityData/ratio_summary_LML.csv")
 
 
 
@@ -303,7 +315,7 @@ slopes = summary(slopes) %>%
   select(-df) %>%
   mutate(cred = paste("[", lower.CL, ", ", upper.CL, "]", sep = ""))
 
-write.csv(slopes, "Figures_Tables/TemporalDiversityData/slopes_ratios_LML.csv")
+#write.csv(slopes, "Figures_Tables/TemporalDiversityData/slopes_ratios_LML.csv")
 
 
 

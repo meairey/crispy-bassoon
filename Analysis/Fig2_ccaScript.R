@@ -1,3 +1,4 @@
+set.seed(123)
 # Libraries --
 library(tidyverse)
 library(gridExtra)
@@ -13,6 +14,9 @@ LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>%
 env_updated.lml = read.csv("Data/CCA_data/LML_habitat.csv")  %>%
   select(X, SITE_N, B, C, EV, FW, S, SV, O, BED, CW, everything())  %>%
   mutate(across(c(-SITE_N, -X), ~ ifelse(. < 3, 0, 1))) ## Makes this just a presence absence of any habitat feature that is more than 60% of the shoreline
+
+
+
 
 
 
@@ -128,7 +132,7 @@ eig.sum = data.frame(CCA1 = CCA1, CCA2 = CCA2, CCA3 = CCA3, CCA4 = CCA4)
 ## Create table
 sum.table.lml = rbind(eig.sum, scores(cca_model.lml,  choices = 1:4)$biplot,
       scores(cca_model.lml, choices = 1:4)$species)
-## Write table - there is also a cleaned excel workbook with table formating in the Tables_Figures folder in crispy_bassoon
+## Write table - there is also a cleaned excel workbook with table formatting in the Tables_Figures folder in crispy_bassoon
 #write.csv(sum.table.lml,"Data/CCA.lml.csv")
 
 
@@ -136,9 +140,9 @@ sum.table.lml = rbind(eig.sum, scores(cca_model.lml,  choices = 1:4)$biplot,
 ## Scree/Elbow plot
 
 
-ggplot(mapping = aes( x = c(1:9), y = eigenvalues.lml[1:9,"value"])) + 
+LML.scree = ggplot(mapping = aes( x = c(1:9), y = eigenvalues.lml[1:9,"value"])) + 
   geom_line() + geom_point() +
-  xlab("CCA Axis") + ylab("Eigen Value") +
+  xlab("LML CCA Axis") + ylab("Eigen Value") +
   theme_minimal(base_size = 14)
 
 # FBL -----------------------------
@@ -256,6 +260,13 @@ eigenvalues.fbl = eigenvals(cca_model.fbl) %>%
   rename("value" = "x")%>%
   rownames_to_column(var = "rowname") 
 
+
+FBL.scree = ggplot(mapping = aes( x = c(1:5), y = eigenvalues.fbl[1:5,"value"])) + 
+  geom_line() + geom_point() +
+  xlab("FBL CCA Axis") + ylab("Eigen Value") +
+  theme_minimal(base_size = 14)
+
+
 ## Get unconstrained values
 CCA.fbl = eigenvalues.fbl %>% 
   filter(grepl("CCA", rowname))
@@ -329,4 +340,31 @@ ggplot() +
     panel.grid.major = element_line(color = "gray90")
   ) + 
   facet_wrap(~WATER, labeller = labeller(WATER = c( "FBL" ="First Bisby", "LML" = "Little Moose")))
+
+
+## Scree plot for both CCAs
+
+grid.arrange(FBL.scree, LML.scree)
+
+
+## Visual of habitats in each lake
+
+habs = read.csv("Data/habs.csv") %>%
+  select(-X) %>%
+  group_by(WATER) %>%
+  arrange(Habitat)
+
+
+env_updated.lml %>% 
+  select(-S) %>%
+  left_join(habs %>%
+              select(-WATER)) %>%
+  pivot_longer(B:G,names_to = "Hab_Feat", values_to = "Pres") %>%
+  filter(Pres>0) %>%
+  ggplot(aes(y = SITE_N, x = Hab_Feat, fill = Pres )) + 
+  geom_tile() +
+  facet_wrap(~Habitat, scales = "free")
+
+habs
+
 

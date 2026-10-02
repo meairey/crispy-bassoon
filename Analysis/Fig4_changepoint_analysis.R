@@ -1,32 +1,40 @@
+set.seed(123)
+## Setup -------------
 setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon")
 library(ecp)
 library(pscl)
 library(wesanderson)
 library(tidyverse)
 `%nin%` = Negate(`%in%`)
+pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
+## Labels used for both lakes
+labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudminnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker") 
+labels.si = c("CC"="S. atromaculatus", "CS" = "L. cornutus", "MM" = "U. limi", "PS" = "L. gibbosus", "SMB" = "M. dolomieu", "WS" = "C. commersonii") 
+
+
 ## LML -------------------------------
 
-#### These are the changepoint analyses of all habitats and species 
-
-## Habitat changepoints ------------------
-
+### Data  ------
 
 LML.CPUE.w.sec = read.csv("Data/LML_CPUE.csv") %>% 
   column_to_rownames(var = "X")
-species_names = c("brown bullhead", "creek chub", "common shiner", "lake trout", "central mudminnow", "pumpkinseed", "rainbow smelt", "round whitefish", "smallmouth bass", "slimy sculpin","white sucker")
-vec = vector()
-p.val = vector()
-species = colnames(LML.CPUE.w.sec)
 
-change_points_list = list()
+species_names = c("brown bullhead", "creek chub", "common shiner", "lake trout", "central mudminnow", "pumpkinseed", "rainbow smelt", "round whitefish", "smallmouth bass", "slimy sculpin","white sucker") ## This varies by lake, variable gets rewritten below
 
-pal_con = wes_palette("Zissou1", type ="continuous")
+vec = vector() ## empty vector to fill
+
+p.val = vector() ## empty vector to fill
+
+#species = colnames(LML.CPUE.w.sec) ## included species from data frame ## DELETE LINE???
+
+change_points_list = list() ## empty list to fill
+
+pal_con = wes_palette("Zissou1", type ="continuous") ## pallete for plotting
+
 cat = wes_palette("Zissou1", type ="discrete")
 
-labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudminnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker")
-labels.si = c("CC"="S. atromaculatus", "CS" = "L. cornutus", "MM" = "U. limi", "PS" = "L. gibbosus", "SMB" = "M. dolomieu", "WS" = "C. commersonii")
 
-pal_custom = c("#91bab6","#DCCB4E","#b5ea8c","#194b57","#E79805","#739559")
+
 
 
 ## Creating data for habitat assignments 
@@ -43,27 +51,24 @@ LML.v = LML.v %>%
  mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
   filter(HAB_1 != "NA")
 
-
+## List of habitat designations by site index in LML in 1998
 sandy.98 = c(2,4,5,12,13,11)
 rocky.98 = c(1,3,7,8,9,10)
-
+## List of habitat designations by site index in LML 1999
 sandy.99 = c(1,4,5)
 rocky.99= c(3,2)
 color_fixed = data.frame(hex = c("#707173","#56B4E9", "#D55E00","#009E73"), color = c(1:4))
 
 
-LML.v %>% 
-  filter(HAB_1 == "R")
 
 species = c("CC_1", "CC_2", "CS_1", "CS_2", "MM_1", "MM_2", "PS_1", "PS_2", "SMB_1","SMB_2", "WS_1","WS_2")
 list_coef.R = list()
 list_coef.S = list()
 coef.dat = NA
 
-## remove this this is just to look at other species
+### Change point and regression analyses -----
 
-species = (LML.v$Species %>% unique())
-## Fixed change point using multiple sites a year as multivariate --------- 
+## Note that you need to manually create the file of CP lines by 
 for(i in 1:length(species)){
   list_habitats = list()
   for(h in c("S","R")){
@@ -82,35 +87,29 @@ for(i in 1:length(species)){
       column_to_rownames(var = "Year") %>%
       as.matrix() %>% as.data.frame()
     
-    
-    
-    #rownames(x) = unique(v$Year)
-    
-    if(h == "R"){
-      x = x %>% select(`1`, `2`, `3`, `5`,`6`,`7`,`8`,`9`,`10`,`12`,`13`,`14`,`15`,`16`,`20`,`24`,`27`,
-                       `31`)
-      
-      
+    ## This sets up the dataframes and deals with habitat assignments
+    if(h == "R"){ ## if rock sites
+      x = x %>% select(`1`, `2`, `3`, `5`,`6`,`7`,`8`,`9`,`10`,`12`,`13`,
+                       `14`,`15`,`16`,`20`,`24`,`27`,`31`)
       x[1,which(colnames(x) %nin% as.character(rocky.98) == T)] = "NA"
       x[2, which(colnames(x) %nin% as.character(rocky.99) == T)] = "NA"
       
-    } else {
+    } else { ## if sediment - based sites
       
       x = x %>% select(`1`, `2`, `4`, `5`,`6`,`11`,`12`,`13`,`17`,`18`,`19`,`21`,`22`,`23`,`25`,`26`,`28`,`29`,`30`,`32`)
-      
       x[1,which(colnames(x) %nin% as.character(sandy.98) == T)] = "NA"
       x[2, which(colnames(x) %nin% as.character(sandy.99) == T)] = "NA"
       
     }
     
-    # Run changepoint analysis ---------------
+    ### Run changepoint analysis ---------------
     output = e.divisive(as.data.frame(x), 
                         R = 10000, 
                         alpha = 1, 
                         min.size = 2,
                         sig.lvl = .05)
     
-    # Format data -------------------------
+    ### Format data 
     dat = data.frame(Year = unique(LML.v$Year), 
                      color = output$cluster)
     v_mod = left_join(LML.v,dat) 
@@ -122,14 +121,11 @@ for(i in 1:length(species)){
       mutate(Year = as.numeric(Year)) %>% 
       mutate(Year = scale(Year)[,1])
     
-    try(M4 = zeroinfl(value_round ~ (Year + SITE) | (Year) + SITE,
-                       dist = 'negbin',
+    M4 = try( zeroinfl(value_round ~ (Year + SITE) | (Year) + SITE, ## set up as try so it doesn't break the loop
+                        dist = 'negbin',
                        data = po_v))
     
-    
-    
-    
-    M4_sum = (M4 %>% summary())
+    M4_sum = M4 %>% summary()
     
     try(if(max(M4_sum$coefficients$count[1:2,4]) < .05){
       print(paste(species[i], h))
@@ -156,7 +152,7 @@ for(i in 1:length(species)){
   
   cpoint_dataframe = rbind(list_habitats[[1]],list_habitats[[2]]) ## LML
   
-  # Creating the changepoint graphs--------------
+  ### Creating the changepoint graphs--------------
   species_graph = rep(species_names, each = 2)[-15]
   length_graph = rep(c("< 100 mm", "> 100 mm"), 12)[-15]
   graph_dat = cpoint_dataframe %>% left_join(color_fixed)
@@ -177,13 +173,10 @@ for(i in 1:length(species)){
     xlab(paste(species[i], " (",length_graph[i],") ")) +
     theme(text = element_text(size = 14)) 
   
-  print(graph)
+  print(graph) ## Prints graphs to watch and create CP_lines csv
   
   
 }
-
-colnames(LML.CPUE.w.sec) 
-coef_dat
 
 coef.names = c("estimate", "stdError", "z_value", "p-value", "ID","HAB_1")
 
@@ -198,13 +191,14 @@ colnames(Scoefs) = coef.names
 coefs.LML = rbind(Rcoefs, Scoefs) %>% as.data.frame()  %>% 
   mutate(WATER = "LML")%>% 
   select(WATER, ID, HAB_1, everything())
+
 coefs.LML
 
 
 ## Final Figure
 cp_lines = read.csv("Data/hab_cp.csv") %>% filter(SP %in% c("CC","CS","PS","WS","SMB","MM")) %>% filter(WATER == "LML")
 
-  
+
 LML.v %>%
   group_by(Year, HAB_1, Species) %>%
   summarize(mean_CPUE = mean(value)) %>%
@@ -230,7 +224,6 @@ LML.v %>%
   theme(axis.text.x = element_text(angle= 90, vjust = .5),
         legend.position = "bottom", 
         legend.title = element_blank()) +
-  #labs(fill = "Habitat & Age") + 
   xlab("") + 
   ylab("CPUE (ind/hour)") +
   geom_vline(aes(xintercept = 2000), col = "black", linetype = 1, size = .5) + 
@@ -239,28 +232,22 @@ LML.v %>%
   scale_color_manual(guide = "none", 
                      values =  pal_custom[c(1,2,4,5)],
                      
-                     labels = c(expression("R-Juvenile"^"WS"), #1 ## These numbers represent the values for the pallete
+                     labels = c(expression("R-Juvenile"^"WS"), #1 ## These numbers represent the values for the palette
                                 "S-Juvenile", #2
                                 "R-Adult", #3
                                 "S-Adult" #5
                      ))
+## FBL -----------
 
 
-expression(R^Juvenile)
-
-
- ## FBL --------
-
+### Data setup ---------
 species_names = c( "creek chub",  "lake trout", "central mudminnow",  "smallmouth bass", "brook trout","white sucker")
-
-
 
 FBL.CPUE.w.sec = read.csv("Data/FBL_CPUE.csv") %>% 
   column_to_rownames(var = "X")
-vec = vector()
-p.val = vector()
+vec = vector() ## empty vector rewrites above
+p.val = vector() ## empty vector rewrites above
 species = colnames(FBL.CPUE.w.sec)[c(-3,-4, -9,-10) ]
-species = colnames(FBL.CPUE.w.sec)[c(-3) ]
 load("Data/ChangePoint_Data/FBL_v.RData")
 
 change_points_list = list()
@@ -273,11 +260,11 @@ coef.dat = NA
 list_coef.R = list()
 list_coef.S = list()
 list_coef.SW = list()
-## Fixed change point using multiple sites a year as multivariate --------- 
+## Changepoint for loop 
 for(i in 1:length(species)){
   list_habitats = list()
   for(h in c("S","SW","RW")){
-    # Set up data frame
+    ### Set up data frame
     x = FBL_v %>% 
       filter(Species == species[i], HAB_1 == h) %>%
       mutate(value = as.numeric(value)) %>% 
@@ -291,14 +278,14 @@ for(i in 1:length(species)){
       as.matrix() %>% as.data.frame() %>%
       select(-WATER)
     
-    # Run change  point analysis ---------------
+    ### Run change  point analysis ---------------
     output = e.divisive(as.data.frame(x), 
                         R = 10000, 
                         alpha = 1, 
                         min.size = 2,
                         sig.lvl = .05)
     
-    # Format data -------------------------
+    ### Format data 
     dat = data.frame(Year = unique(FBL_v$Year), 
                      color = output$cluster)
     v_mod = left_join(FBL_v,dat)
@@ -309,7 +296,7 @@ for(i in 1:length(species)){
       mutate(Year = as.numeric(Year)) %>% 
       mutate(Year = scale(Year)[,1])
     
-    try(M4 = zeroinfl(value_round ~ (Year ) | (Year) ,
+    M4 = try( zeroinfl(value_round ~ (Year ) | (Year) ,
                        dist = 'negbin',
                        data = po_v))
     
@@ -346,7 +333,7 @@ for(i in 1:length(species)){
   
   cpoint_dataframe = rbind(list_habitats[[1]],list_habitats[[2]], list_habitats[[3]]) ## FML
   
-  # Creating the changepoint graphs--------------
+  ### Creating the changepoint graphs--------------
   species_graph = rep(species_names, each = 2)
   length_graph = rep(c("< 100 mm", "> 100 mm"), 12)
   graph_dat = cpoint_dataframe %>% left_join(color_fixed)
@@ -395,27 +382,7 @@ coefs.FBL
 
 
 
-## Bind together the coefficient data frames
-
-coefs = rbind(coefs.LML, coefs.FBL) %>%
-  left_join(read.csv("Data/legend.csv"), by = c("ID" = "id")) %>%
-  na.omit() %>%
-  select(WATER, HAB_1, common, age, estimate, stdError, z_value, `p-value`) %>%
-  mutate(z_value = round(as.numeric(z_value), digits = 3),
-         `p-value` = round(as.numeric(`p-value`), digits = 3),
-         stdError = round(as.numeric(stdError), digits = 3),
-         estimate = round(as.numeric(estimate), digits = 3)) %>%
-  mutate(`p-value` = replace(`p-value`, `p-value` <.001, "<.001")) %>%
-  rename(Water = WATER,
-         Habitat = HAB_1, 
-         `Standard Error` = stdError,
-         `Z Value` = z_value, 
-         Common = common, 
-         Age = age,
-         B = estimate) 
-coefs
-write.csv(coefs, row.names = F, file = "Data/Coef.csv")
-## Final Plots ----------------------
+### Creating the change point graph ----------------------
 
 
 cp_lines = read.csv("Data/hab_cp.csv") %>% 
@@ -451,7 +418,6 @@ FBL_v %>%
   theme(axis.text.x = element_text(angle= 90, vjust = .5), 
         legend.position = "bottom", 
         legend.title = element_blank()) +
-  #labs(fill = "Habitat & Age") + 
   xlab("") + 
   ylab("CPUE (ind/hour)") + 
   geom_vline(aes(xintercept = 2003)) + 
@@ -468,7 +434,26 @@ FBL_v %>%
 
 
 
+## Bind together the coefficient data frames
 
+coefs = rbind(coefs.LML, coefs.FBL) %>%
+  left_join(read.csv("Data/legend.csv"), by = c("ID" = "id")) %>%
+  na.omit() %>%
+  select(WATER, HAB_1, common, age, estimate, stdError, z_value, `p-value`) %>%
+  mutate(z_value = round(as.numeric(z_value), digits = 3),
+         `p-value` = round(as.numeric(`p-value`), digits = 3),
+         stdError = round(as.numeric(stdError), digits = 3),
+         estimate = round(as.numeric(estimate), digits = 3)) %>%
+  mutate(`p-value` = replace(`p-value`, `p-value` <.001, "<.001")) %>%
+  rename(Water = WATER,
+         Habitat = HAB_1, 
+         `Standard Error` = stdError,
+         `Z Value` = z_value, 
+         Common = common, 
+         Age = age,
+         B = estimate) 
+
+write.csv(coefs, row.names = F, file = "Data/Coef.csv")
 
 
 ## Checking what percent lower the FBL populations were by the end of the study
@@ -486,12 +471,12 @@ LML.v %>%
   group_by(Species, period) %>%
   summarize(year.average = mean(year.sum)) %>%
   ungroup() %>%
-  arrange( Species, rev(period)) %>%
+  arrange(Species, rev(period)) %>%
   group_by(Species) %>%
   mutate(decreased = ((year.average - lag(year.average)) / lag(year.average))*100) %>% 
   na.omit() %>%
   ungroup() %>% 
-  summarize(range(decreased))
+  summarize(min = range(decreased)[1], max = range(decreased)[2])
 
   
 

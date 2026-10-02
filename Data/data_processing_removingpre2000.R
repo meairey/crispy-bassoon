@@ -30,11 +30,6 @@ source("../AFRP/AFRP_Master_Code/AFRP_Functions.R")
 sample = sample %>% mutate(SITE_N = str_replace(SITE_N, "BEF.FBL.003,4", 
                                                 "BEF.FBL.003"))
 
-sample %>% filter(MONTH > 8, WATER == "LML", GEAR_CODE == "NAF") %>%
-  select(YEAR) %>%
-  unique()
-
-
 ## Contain the catch data for each sampling event
 BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   filter(WATER %in% c("LML", "FBL"), 
@@ -42,62 +37,11 @@ BEF_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
          GEAR_CODE == "NAF") %>%
   filter(MONTH %in% c(5,6,7)) ## Filter to just sample the spring period of sampling
 
-BEF_data_unfiltered %>% filter(WATER == "LML", GEAR_CODE == "NAF", 
-                               SPECIES == "CC", LENGTH > 100,  MONTH < 7) %>%
-  group_by(YEAR) %>%
-  summarize(cat = n()) -> dog
 
 
 rare_threashold = 50 ## To filter out rare taxa
 
-BEF_data_unfiltered %>%
-  group_by(WATER) %>%
-  select(YEAR, SPECIES) %>%
-  filter(SPECIES == "RT") %>%
-  slice_min(YEAR) %>%
-  summarize(cat = length(unique(SPECIES)),
-            dog = unique(SPECIES)) %>%
-  print(n = 28)
 
-
-
-
-### SMB Age/Size 
-
-read.csv("Data/FISH_AGE_GROWTH.csv") %>% left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
-  left_join(sample) %>%
-  filter(MONTH < 8) %>%
-  select(LENGTH, AGE_FISH_N, MONTH, YEAR) %>% 
-  summarize(mean = mean(LENGTH, na.rm =T),
-            min = min(LENGTH, na.rm = T), ## Mean SMB age 1 = 103, min 53
-            max = max(LENGTH, na.rm = T),
-            med = median(LENGTH, na.rm = T))
-
-
-read.csv("Data/Supplemental/FISH_AGE_GROWTH_SMB.csv") %>% 
-  left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
-  left_join(sample) %>%
-  filter(MONTH < 8) %>%
-  select(LENGTH, FINAL_AGE, MONTH, YEAR) %>% 
-  group_by(FINAL_AGE) %>%
-  summarize(mean = mean(LENGTH, na.rm =T),
-            min = min(LENGTH, na.rm = T), ## Min SMB size around age 2 = 102
-            max = max(LENGTH, na.rm = T),
-            med = median(LENGTH, na.rm = T))
-
-
-### PS size/age
-  
-read.csv("Data/Supplemental/FISH_AGE_GROWTH_PS.csv") %>% 
-  left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
-  left_join(sample) %>%
-  filter(MONTH < 8) %>%
-  select(LENGTH, FINAL_AGE, MONTH, YEAR) %>% 
-  group_by(FINAL_AGE) %>%
-  summarize(mean = mean(LENGTH, na.rm =T),
-            min = min(LENGTH, na.rm = T), ## Min SMB size around age 2 = 102
-            max = max(LENGTH, na.rm = T),
-            med = median(LENGTH, na.rm = T))
 
 
 
@@ -120,7 +64,7 @@ rare = BEF_data_unfiltered %>% group_by(WATER, SPECIES) %>%
   filter(frequency < rare_threashold)
 stocked = c("LLS", "RT") ## Stocked fish in little moose
 remove = c(stocked,  "LT", "RS","RWF") ## Remove stocked taxa, and pelagic taxa that we're not focusing on
-remove = "cat"
+
 # Define Boat electrofishing data with target taxa only
 BEF_data = BEF_data_unfiltered %>%
   left_join(rare) %>% ## Join rare data frame
@@ -129,13 +73,15 @@ BEF_data = BEF_data_unfiltered %>%
   select(-frequency)
 ## 
 
-
-LML_unfiltered = BEF_data_unfiltered %>% filter(WATER == "LML")
+## For this modified change point analysis you have to be after removal initiation
+LML_unfiltered = BEF_data_unfiltered %>% 
+  filter(WATER == "LML") %>%
+  filter(YEAR > 2000)
 
 
 ## Create matrices for each cluster of years that were sampled uniquely
 
-## Standardized siittets post 2000
+## Standardized sites post 2000
 post_2000 = LML_unfiltered %>% # Take LML data
   filter(YEAR == 2005) %>% ## Just filtered for any year during the standardized sampling
   select(SITE_N) %>% # select just site numbers
@@ -143,36 +89,10 @@ post_2000 = LML_unfiltered %>% # Take LML data
   separate(SITE_N, into = c("year", "water", "SITE"), remove = F) %>% ## separate out to get the SITE component of the SITE_N
   mutate(SITE_num = parse_number(SITE)) %>% ## Assign number in chronological order
   select(SITE_N, SITE_num) ## select just the SITE_N and the new assigned name
-## 1998 sites -----------
-LML_1998_site = LML_unfiltered %>% ## Take LML data
-  filter(YEAR == 1998) %>% ## filter for 1998
-  select(SITE_N) %>% unique() %>% ## find unique sites
-  mutate(SITE_num = c(1:20)) ## assign site a new number in chronological order
-
-LML_1998 = LML_unfiltered %>% filter(YEAR == 1998) %>% ## create a new data frame that joins these new site names with 1998 data
-  left_join(LML_1998_site)
-
-## 1999 sites ------------
-lml_1999 = LML_unfiltered %>% ## Take LML Data
-  filter(YEAR == 1999) %>% ## Filter for 1999
-  dplyr::select(SITE_N) %>% unique() %>% ## Select for unique sites
-  filter(SITE_N !="NA") %>% ## remove any sites that are not identified
-  mutate(SITE_num = c(1:10)) ## assign site a new number in chronological order
-
-LML_1999 = LML_unfiltered %>% filter(YEAR == 1999) %>% ## create a new data frame that joins these new site names with 1999 data
-  left_join(lml_1999)
 
 ## Combine all the data frames together from 1998, 1999, and 2000+
 
-site_matrix = rbind(lml_1999, LML_1998_site, post_2000) %>%
-  as.data.frame() 
 
-LML_data_unfiltered = left_join(LML_unfiltered, site_matrix) %>% ## Join the LML data with the matrix of new site numbers
-  mutate(SITE = SITE_N) %>% ## Make sure to use this BEF_data_unfiltered for final graphs
-  mutate(SITE_cat = case_when(YEAR %nin% c(1998, 1999) ~ as.numeric(SITE_num),
-                              YEAR %in% c(1998, 1999) ~ as.numeric(SITE_num))) %>%
-  filter(SITE != "NA") %>% 
-  select(SITE_N, SITE, everything())
 
 
 
@@ -183,12 +103,15 @@ LML.habs = read.csv("Data/updated_habitat.csv") %>%
   rename(SITE_num = SITE) %>%
   select(WATER, SITE_N, Habitat) %>%
   unique()
+
+LML.habs %>% group_by(new_hab) %>%
+  summarize(n())
 ## I am trying out if i go in and remove certain sites
-updated_hab = read.csv("Data/updated_habs_LML.csv") ## this is the mixed substrate sites
+LML.habs = read.csv("Data/updated_habs_LML.csv") ## this is the mixed substrate sites
 #remove_sites = (updated_hab %>% filter(same == F))$SITE_N
 ## Intermediate to go into LML.CPUE.w.sec
 ### Note 31626 I am altering the below lengths for a simulation on CP stability vs. age breakpoint
-LML_data = LML_data_unfiltered %>% filter(SPECIES %nin% remove) %>% 
+LML_data = LML_unfiltered %>% filter(SPECIES %nin% remove) %>% 
   mutate(LENGTH = case_when(SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,71.4,5000)),
                             SPECIES %in% c("CS") ~ .bincode(LENGTH, breaks = c(0,70,50000)),
                             SPECIES %in% c("PS") ~ .bincode(LENGTH, breaks = c(0,70,50000)),
@@ -199,11 +122,10 @@ LML_data = LML_data_unfiltered %>% filter(SPECIES %nin% remove) %>%
   
   unite("SPECIES", c(SPECIES, LENGTH), remove = F) %>% 
   filter(!is.na(LENGTH)) %>%
-  mutate(SITE = as.numeric(SITE)) %>%
-  left_join(LML.habs, by =) %>%
+ # mutate(SITE = as.numeric(SITE)) %>%
+  left_join(LML.habs) %>%
   rename(HAB_1 = Habitat) %>% 
   mutate(EFFORT = as.numeric(EFFORT)) %>%
-  select(-SITE) %>%
   rename(SITE = SITE_N) %>%
   filter(SPECIES %nin% remove)
 
@@ -221,8 +143,8 @@ LML_cpue.habs = LML.CPUE.w.sec %>%
   mutate(names = rownames(.)) %>% 
   separate(names, into = c("YEAR", "SITE_N"), sep = "_") %>%
   left_join(LML.habs) %>% 
-  select(SITE_N, Habitat, everything()) %>%
-  select(SITE_N, Habitat) %>%
+  #select(SITE_N, new_hab, everything()) %>%
+  select(SITE_N, new_hab) %>%
   unique()
 
 ## Species names for the species in LML
@@ -232,15 +154,9 @@ species_names.LML = c("brown bullhead", "creek chub", "common shiner", "lake tro
 
 
 ## Matrix that includes the site_N and the new assigned site numbers
-c.h = unique(LML_cpue.habs) %>% na.omit() %>% mutate(SITE = c(c(1:13), c(1:5), c(1:32)))
+c.h = unique(LML_cpue.habs) 
 #c.h = site_matrix %>% left_join(LML_cpue.habs) %>% na.omit() 
 dim(c.h)
-cat = read.csv("Data/updated_habs_testing.csv")
-c.h.test = unique(LML_cpue.habs) %>% na.omit() %>% mutate(SITE = c(c(1:13), c(1:5), c(1:32))) %>%
-  left_join(cat %>% 
-              select(-Habitat), by = "SITE_N") %>% 
-  mutate(new_hab = coalesce(new_hab, Habitat)) %>% 
-  mutate(same = Habitat == new_hab) ### This here is a new dataframe (a copy of the one above) that is trying to find a way to filter out the problamatic sites around the lake
 
 
 
@@ -256,28 +172,24 @@ LML.v = LML.CPUE.w.sec %>%
                names_to = "Species") %>%
   separate(y_s, 
            into = c("Year", "SITE_N"), sep = "_") %>%
-  left_join(c.h.test) %>%
+  left_join(c.h) %>%
   unite("ID", 
-        c(SITE,Species), 
+        c(SITE_N,Species), 
         sep = "_", 
         remove = F) %>%
   select(-SITE_N) %>%
-  rename(HAB_1 = Habitat) %>%
+  rename(HAB_1 = new_hab) %>%
   mutate(value = value * 60 * 60 ) %>%
-  filter(Year != 2002) %>% ## below is the new code you can remove anything after if it doesnt work dont touch above
+  filter(Year != 2002) 
 
-  filter(same == TRUE) %>% ## filter out problematic sites
-  select(-same)# %>% ## remove the column used for filtering above 
-  #filter(SITE == 3) ## testing why sites aren't working remove this
+save(LML.v, file = "Data/LML.v.post2000.RData")
 
 ## Because of site issues, remove the woody habitat descriptor from habitat
 
 LML.v = LML.v %>% 
   mutate(HAB_1 = str_replace(HAB_1, "SW", "S")) %>%
   mutate(HAB_1 = str_replace(HAB_1, "RW", "R")) %>%
-  filter(HAB_1 != "NA") %>% 
-  select(-new_hab) ## remove new hab because we removed problematic sites
-
+  filter(HAB_1 != "NA") 
 
 
 
@@ -312,7 +224,7 @@ FBL_data_unfiltered = left_join(fish, sample, by = "YSAMP_N") %>%
   filter(MONTH %in% c(5,6,7))
 
 
-FBL_data_unfiltered %>% filter(YEAR < 2005) %>% select(WATER, SITE_N, MONTH,YSAMP_N) %>% unique()
+
 
 FBL_data_unfiltered = BEF_data_unfiltered %>% filter(WATER == "FBL") 
 
@@ -374,18 +286,18 @@ FBL_v = FBL.CPUE.w.sec %>%
                names_to = "Species") %>%
   separate(y_s, 
            into = c("Year", "SITE_N"), sep = "_") %>%
-  left_join(habs) %>%
+  left_join(updated.fbl.habs) %>%
   unite("ID", 
         c(SITE_N,Species), 
         sep = "_", 
         remove = F) %>%
-  rename(HAB_1 = Habitat) %>%
+  rename(HAB_1 = new_hab) %>%
   mutate(value = value * 60 * 60 ) %>%
   filter(Year != 2002)
 
 FBL_v %>% summarize(unique(HAB_1))
 
-#save(file = "../crispy-bassoon/Data/ChangePoint_Data/FBL_v.RData", FBL_v)
+#save(file = "../crispy-bassoon/Data/ChangePoint_Data/FBL_v2.RData", FBL_v)
 
 
 ## Looking at sites 7/8 like Kurt suggested...
@@ -476,83 +388,43 @@ site.hab.table = BEF_data_unfiltered %>%
 
 write.csv(file = "Figures_Tables/SiteHabTable.csv", site.hab.table, rownames = F)
 
-BEF_data_unfiltered %>% select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
-  filter( MONTH< 7, WATER == "LML",
-          #YEAR == 2018
-          ) %>% 
-  ggplot(aes(x = LENGTH)) + 
-  geom_histogram() + 
-  facet_wrap(~SPECIES, scales = "free") 
+### Size at age
+### SMB Age/Size 
+
+read.csv("Data/FISH_AGE_GROWTH.csv") %>% left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
+  left_join(sample) %>%
+  filter(MONTH < 8) %>%
+  select(LENGTH, AGE_FISH_N, MONTH, YEAR) %>% 
+  summarize(mean = mean(LENGTH, na.rm =T),
+            min = min(LENGTH, na.rm = T), ## Mean SMB age 1 = 103, min 53
+            max = max(LENGTH, na.rm = T),
+            med = median(LENGTH, na.rm = T))
 
 
-install.packages("pracma")
-
-# Load pracma
-install.packages("pracma")
-library(pracma)
-
-# Example vector
-vector <- c(0, 2, 1, 3, 1, 5, 0, 4)
-
-# Find peaks
-peaks <- findpeaks(vector)
-
-print(peaks)  
-
-bin_width = 10
-
-## Length/cohorts
-cc_cohort = BEF_data_unfiltered %>%
-  select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
-  filter( MONTH< 7, WATER == "LML",
-          #YEAR == 2018,
-          SPECIES == "CS") %>%
-  mutate(binned = cut(LENGTH, breaks = seq(min(LENGTH, na.rm =T), max(LENGTH, na.rm =T) + bin_width, by = bin_width))) %>%
-  group_by(binned) %>%
-  summarize(frequency = n()) %>%
-  na.omit()
+read.csv("Data/Supplemental/FISH_AGE_GROWTH_SMB.csv") %>% 
+  left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
+  left_join(sample) %>%
+  filter(MONTH < 8) %>%
+  select(LENGTH, FINAL_AGE, MONTH, YEAR) %>% 
+  group_by(FINAL_AGE) %>%
+  summarize(mean = mean(LENGTH, na.rm =T),
+            min = min(LENGTH, na.rm = T), ## Min SMB size around age 2 = 102
+            max = max(LENGTH, na.rm = T),
+            med = median(LENGTH, na.rm = T))
 
 
-
-cc_cohort
-
-
-peaks = findpeaks(cc_cohort$frequency)
-cc_cohort[peaks[1,4],1]
-
-
-
-## Peak finding for age cohorts 
-
-species = c("CC", "CS","MM","PS","SMB","WS")
-cohort_end = rep(NA,6)
-
-for(i in 1:6){
+### PS size/age
   
-  x = BEF_data_unfiltered %>%
-    select(WATER, SPECIES, LENGTH, MONTH, YEAR) %>% 
-    filter( MONTH< 7, WATER == "LML",
-
-            SPECIES == species[i]) %>%
-    mutate(binned = cut(LENGTH, breaks = seq(min(LENGTH, na.rm =T), max(LENGTH, na.rm =T) + bin_width, by = bin_width))) %>%
-    group_by(binned) %>%
-    summarize(frequency = n()) %>%
-    na.omit()
-  
-  peaks = findpeaks(x$frequency)
-  
-  cohort_end[i] = x[peaks[1,4],1] %>% as.character()
-  
-  
-}
-
-cohort_end %>% as.matrix()
-
-
-
-
-
-
+read.csv("Data/Supplemental/FISH_AGE_GROWTH_PS.csv") %>% 
+  left_join(fish, by = c("AGE_FISH_N" = "FISH_N")) %>%
+  left_join(sample) %>%
+  filter(MONTH < 8) %>%
+  select(LENGTH, FINAL_AGE, MONTH, YEAR) %>% 
+  group_by(FINAL_AGE) %>%
+  summarize(mean = mean(LENGTH, na.rm =T),
+            min = min(LENGTH, na.rm = T), ## Min SMB size around age 2 = 102
+            max = max(LENGTH, na.rm = T),
+            med = median(LENGTH, na.rm = T))
 
 
 

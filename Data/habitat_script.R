@@ -1,3 +1,4 @@
+`%nin%` = Negate(`%in%`)
 # Replace "your_shapefile.shp" with the path to your shapefile
 library(ggplot2)
 library(sf)
@@ -7,6 +8,8 @@ library(tidyverse)
 
 library(lwgeom)
 
+habs = read.csv("Data/habs.csv") %>% 
+  select(-X)
 
 
 ## Set up LML shape file ---------------
@@ -57,7 +60,7 @@ reorder_points <- function(df) {
 setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
 
 ## gps points from habitat features
-gps = read.csv("Data/garmin_lml_hab_day2.csv")
+gps = read.csv("Data/CCA_data/garmin_lml_hab_day2.csv")
 
 # set of points to create pairs for joining gps and features together
 points = data.frame(ID1 = rep(1:1100, each = 1100), 
@@ -78,7 +81,7 @@ distance_pairs = points %>%
   mutate(dist = distHaversine(cbind(lon1, lat1), cbind(lon2, lat2))) 
 
 ## Read in the data sheets and replace any codes that need changing
-substrate = read.csv("Data/habitat_class1.csv") %>% 
+substrate = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
   filter(is.na(start) == F) %>%
   filter(MEA == "MEA") %>%
   #filter(density > 2) %>%
@@ -226,24 +229,52 @@ whole %>%
 
 ## Creating some variable for coarse woody debris 
 
+tree_density_habitat = whole %>% left_join(site_lengths, by = "site") %>%
+  filter(feature == "CW") %>%
+  group_by(site, feature, shoreline) %>%
+  summarize(total_hab = sum(dist)) %>%
+  mutate(total.tree.count = 10 * (total_hab)/50) %>%  ## If I assume there are 10 trees in 50 m of dense tree habitat
+  mutate(MEA = "MEA")
 
-wood_counts = read.csv("Data/habitat_class1.csv") %>% 
-  group_by(water, site, feature) %>%
+
+wood_counts = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
+  group_by(water, site, feature)%>%
+  filter(feature == "CW")  %>%
+  
   #filter(is.na(start) == T) %>%
   filter(MEA == "MEA") %>%
+  left_join(tree_density_habitat) %>%
   summarize(sum_feature = n()) %>%
   ungroup() %>%
   group_by(water) %>%
-  complete(site, feature)%>%    
+  complete(site, feature) %>%    
   mutate(across(everything(), ~ replace_na(.x, 0))) %>%
   filter(feature == "CW") %>%
   ungroup() %>%
-  group_by(water) %>%
-  mutate(total_logs = sum(sum_feature),
-         percent = sum_feature / total_logs * 100, 
-         score = percent / 100 * 5) %>%
-  rename("SITE_N" = "site") %>%
-  select(-total_logs, -sum_feature, -feature)
+  left_join(site_lengths %>% ## Calculate the number of trees per 
+              select(site, shoreline)) %>%
+  mutate(density = (sum_feature / shoreline )* 100) %>%
+   mutate(CW = case_when(
+    density == 0 ~ 0,  # zeros are rank 0
+    TRUE ~ as.numeric(cut(
+      density,
+      breaks = c(-Inf,
+                 quantile(density[density > 0], probs = c(0.2,0.4,0.6,0.8)),
+                 Inf),
+      labels = 1:5,
+      right = TRUE
+    )) - 1  # subtract 1 so non-zero ranks are 1–4
+  )) %>%
+  select(water, site, CW)
+  
+  
+  
+
+
+  
+
+
+
 
 
 ## Creating little table for the CCA
@@ -254,23 +285,98 @@ env_updated_FBL = whole %>% left_join(site_lengths, by = "site") %>%
   #separate(site, into = c("gear", "water", "site_n"), remove = F) %>%
   select(site,  feature, percent_shoreline) %>%
   mutate(f_score = .bincode(percent_shoreline, breaks = c(0,25,50,75,110))) %>%
-  select(-percent_shoreline) %>%
+  select(-percent_shoreline)%>% 
+  
   pivot_wider(values_from = f_score, names_from = feature) %>%    
   mutate(across(everything(), ~ replace_na(.x, 0))) %>%
   rename("SITE_N" = "site") %>%
-  left_join(wood_counts) %>%
+  select(-CW) %>%
+  mutate(water = "FBL") %>%
+  left_join(wood_counts , by = c("SITE_N" = "site", "water")) %>%
   filter(water == "FBL") %>%
-  mutate(CW = round(CW + score, digits = 0)) %>%
-  select(-water, -percent, -score)
+  mutate(CW = ifelse(is.na(CW), 0, CW)) %>%
+  select(water, everything())
+  
 
-write.csv(env_updated_FBL, "Data/FBL_habitat.csv") ## Write file
+#write.csv(env_updated_FBL, "Data/FBL_habitat.csv") ## Write file
+
+## Trying to come up with more nuanced habitat designations
+## Trying to decide on new hab classes save below
+FBL_updated_sub =env_updated_FBL  %>%
+  left_join(habs)  %>% 
+  select(SITE_N,Habitat,  C, B, G, EV, CW) %>%
+  mutate(rock_habitat = pmax(C, G)) %>%
+    mutate(macrohab = case_when(
+    (B <= 1 & C <= 1) ~ "S", 
+    (B <= 1 & C >= 2) ~ "RS", ## cobble fields with low structure,
+    (B >= 2 | C > 3) ~ "R" ## Rock shoals with higher structure or higher density cobbles 
+    
+  )) %>%
+  mutate(new_hab = case_when(CW >= 1 ~ paste(macrohab, "W", sep = ""), 
+                             CW < 1 ~ macrohab) ) %>%
+  select(SITE_N, Habitat, new_hab) %>% 
+  filter(grepl("FBL", SITE_N)) %>%
+  mutate(same.new = case_when(new_hab == Habitat ~ "T",
+                              new_hab == "RS" & Habitat == "S" ~ "Mixed sub",
+                              new_hab == "RSW" & Habitat == "RW" ~ "MS + WD",
+                              new_hab == "R" & Habitat == "S" ~ "F", 
+                              new_hab == "S" & Habitat == "R" ~ "F", 
+                              new_hab == "RW" & Habitat == "R" ~ "Wood diff", 
+                              new_hab == "SW" & Habitat == "S" ~ "Wood diff", 
+                              new_hab == "S" & Habitat == "SW"~ "Wood diff",
+                              new_hab == "R" & Habitat == "RW" ~ "Wood diff",
+                              new_hab == "RS" & Habitat == "SW" ~ "MS + WD",
+                              new_hab == "RSW" & Habitat == "SW" ~ "Mixed sub",
+                              new_hab == "RSW" & Habitat == "S" ~ "MS + WD", 
+                              new_hab == "S" & Habitat == "RW" ~ "F"))
+  
+#write.csv(FBL_updated_sub, "Data/updated_habs_testing.FBL.csv", row.names = F)
+
+env_updated_long.fbl = env_updated_FBL %>%
+  filter(grepl("FBL", SITE_N)) %>%
+  pivot_longer(
+    cols = C:CW,            # all habitat columns
+    names_to = "Habitat",
+    values_to = "Rank"
+  ) %>% filter(Habitat %nin% c("S", "G", "R")) %>%
+  mutate(
+    Habitat = factor(Habitat, levels = c("C","B","BED","EV","SV","O","CW","FW")),
+    SITE_N = factor(SITE_N, levels = unique(SITE_N))  # keeps original order
+  ) %>%
+  mutate(SITE_N = factor(SITE_N, levels = rev(levels(SITE_N))))
+
+# Column-wise heatmap
+ggplot() +
+  geom_tile(data = env_updated_long.fbl, aes(x = Habitat, y = SITE_N, fill = Rank), color = "white") + # tiles with white borders
+  scale_fill_gradient(low = "white", high = "steelblue", na.value = "grey90") +
+  labs(x = "Habitat Feature", y = "Site", fill = "Rank") +
+  geom_text(data = env_updated_long.fbl, 
+            aes(x = Habitat, y = SITE_N, label = as.character(Rank)), size = 3, col = "black") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(hjust = .5, size = 8),
+    axis.text.y = element_text(size = 9),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "bottom",
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank()) +
+  scale_x_discrete(position = "top", labels = c("C" = "Cobble", "B" = "Boulder", "BED" = "Bedrock", "EV" = "Emergent\nvegetation",
+                                                "SV" = "Submerged\nvegetation", "O" = "Organic\nmatter", "CW" = "Coarse woody\ndebris",
+                                                "FW" = "Fine\nwoody debris")) +
+   geom_text(data = (habs %>% filter(WATER == "FBL"))[1:15,], aes(y = SITE_N, x = "Old\nhabitat", label = Habitat), size = 3) +
+  geom_text(data = FBL_updated_sub, aes(y = SITE_N,  x = "New\nhabitat", label = new_hab),  size = 3) +
+  geom_text(data = FBL_updated_sub, aes(y = SITE_N, x = "Difference", label = same.new), size = 3)
+
+ggsave(file = "Figures_Tables/Testing Habitat/FBL_habitat_table.jpeg", width = 8, height = 5, dpi = 600) 
+
 
 ## ------------------ LML ------------------- 
 
 # Set working directory
 setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
 # Pull together df with substrate information and waypoints
-substrate = read.csv("Data/habitat_class1.csv") %>% 
+substrate = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
   filter(water == "LML") %>%
   filter(is.na(start) == F)  %>%
   mutate(feature = str_replace(feature, "A", "SV")) %>%
@@ -340,7 +446,7 @@ gps %>% filter(ID == 678)
 
 # write csv for LML sites
 #write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
-write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
+#write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
 for(i in 1:length(site_lengths$ID1)){
   
   frame = df_ordered %>% filter(ID1 <= site_lengths$ID2[i] & ID1 >= site_lengths$ID1[i] ) %>%
@@ -402,10 +508,90 @@ env_updated_LML = whole_lml %>% left_join(site_lengths, by = "site") %>%
   rename("SITE_N" = "site") %>%
   left_join(wood_counts) %>% ## Join in the woody debris data table
   filter(water == "LML") %>%
-  mutate(CW = round(CW + score, digits = 0)) %>%
-  select(-water, -percent, -score)
+  select(-water, -site)
 
+## Saved old criteria as im playing around with this
+
+
+
+updated_habs.LML= env_updated_LML %>%
+  left_join(habs) %>% 
+  select(SITE_N,Habitat,  C, B, G, EV, CW) %>%
+  unique() %>%
+  mutate(rock_habitat = pmax(C, G)) %>%
+    mutate(macrohab = case_when(
+    (B <= 1 & C <= 1) ~ "S", 
+    (B <= 1 & C >= 2) ~ "RS", ## cobble fields with low structure,
+    (B >= 2 | C >= 3) ~ "R" ## Rock shoals with higher structuure or higher density cobbles 
+    
+  )) %>%
+  mutate(new_hab = case_when(CW >= 1 ~ paste(macrohab, "W", sep = ""), 
+                             CW < 1 ~ macrohab) ) %>%
+  select(SITE_N, Habitat, new_hab) %>% 
+  unique() %>%
+  mutate(same = (
+    (grepl("R", Habitat) & grepl("R", new_hab)) |
+    (grepl("S", Habitat) & grepl("S", new_hab))
+  ) & new_hab != "RS") %>%
+  mutate(same.new = case_when(new_hab == Habitat ~ "T",
+                              new_hab == "RS" & Habitat == "S" ~ "Mixed sub",
+                              new_hab == "RSW" & Habitat == "RW" ~ "MS + WD",
+                              new_hab == "R" & Habitat == "S" ~ "F", 
+                              new_hab == "S" & Habitat == "R" ~ "F", 
+                              new_hab == "RW" & Habitat == "R" ~ "Wood diff", 
+                              new_hab == "SW" & Habitat == "S" ~ "Wood diff", 
+                              new_hab == "S" & Habitat == "SW"~ "Wood diff",
+                              new_hab == "R" & Habitat == "RW" ~ "Wood diff",
+                              new_hab == "RS" & Habitat == "SW" ~ "MS + WD",
+                              new_hab == "RSW" & Habitat == "SW" ~ "Mixed sub",
+                              new_hab == "RSW" & Habitat == "S" ~ "MS + WD"))
+
+
+write.csv(updated_habs.LML, "Data/updated_habs_LML.csv", row.names = F) ## New habitat data
 
 
 write.csv(env_updated_LML, "Data/LML_habitat.csv")
+
+
+env_updated_long.LML <- env_updated_LML %>%
+  select(-BED) %>%
+  filter(grepl("LML", SITE_N)) %>%
+  pivot_longer(
+    cols = R:CW,            # all habitat columns
+    names_to = "Habitat",
+    values_to = "Rank"
+  ) %>% filter(Habitat %nin% c("S", "G", "R")) %>%
+  mutate(
+    Habitat = factor(Habitat, levels = c("C","B","BED","EV","SV","O","CW","FW")),
+    SITE_N = factor(SITE_N, levels = unique(SITE_N))  # keeps original order
+  ) %>%
+  mutate(SITE_N = factor(SITE_N, levels = rev(levels(SITE_N))))
+
+# Column-wise heatmap
+ggplot() +
+  geom_tile(data = env_updated_long.LML, aes(x = Habitat, y = SITE_N, fill = Rank),color = "white") + # tiles with white borders
+  scale_fill_gradient(low = "white", high = "steelblue", na.value = "grey90") +
+  labs(x = "Habitat Feature", y = "Site", fill = "Rank") +
+  geom_text(data = env_updated_long.LML, 
+            aes(x = Habitat, y = SITE_N, label = as.character(Rank)), size = 3, col = "black") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(hjust = .5, size = 8),
+    axis.text.y = element_text(size = 9),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "bottom",
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank()) +
+  scale_x_discrete(position = "top",labels = c("C" = "Cobble", "B" = "Boulder", "BED" = "Bedrock", "EV" = "Emergent\nvegetation",
+                                                "SV" = "Submerged\nvegetation", "O" = "Organic\nmatter", "CW" = "Coarse woody\ndebris",
+                                                "FW" = "Fine\nwoody debris")) +
+  
+  geom_text(data = updated_habs.LML, aes(y = SITE_N, x = "Old\nhabitat", label = Habitat), size = 3) +
+  geom_text(data = updated_habs.LML, aes(y = SITE_N,  x = "New\nhabitat", label = new_hab),  size = 3) +
+  
+  geom_text(data = updated_habs.LML, aes(y = SITE_N, x = "Old\nhabitat", label = Habitat), size = 3) + 
+  geom_text(data = updated_habs.LML, aes(y = SITE_N, x = "Difference", label = same.new), size = 3)
+
+ggsave(file = "Figures_Tables/Testing Habitat/LML_habitat_table.jpeg", width = 8, height = 6, dpi = 600)
 
