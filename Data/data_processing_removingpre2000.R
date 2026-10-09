@@ -182,6 +182,10 @@ LML.v = LML.CPUE.w.sec %>%
   mutate(value = value * 60 * 60 ) %>%
   filter(Year != 2002) 
 
+LML.v %>%
+  filter(is.na(HAB_1)) %>%
+  select(ID) %>% unique() %>% print(n = 100)
+
 save(LML.v, file = "Data/LML.v.post2000.RData")
 
 ## Because of site issues, remove the woody habitat descriptor from habitat

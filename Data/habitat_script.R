@@ -1,3 +1,8 @@
+# Set working directory
+setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
+
+## Script Setup -------------------
+## filter function
 `%nin%` = Negate(`%in%`)
 # Replace "your_shapefile.shp" with the path to your shapefile
 library(ggplot2)
@@ -5,25 +10,7 @@ library(sf)
 library(geosphere)
 library(viridis)
 library(tidyverse)
-
 library(lwgeom)
-
-habs = read.csv("Data/habs.csv") %>% 
-  select(-X)
-
-
-## Set up LML shape file ---------------
-setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/LML_SMB_removal/Data/LML_shape")
-LML_shape <- st_read("World_Lakes.shp")
-
-## Set up FBL shape file ------------------
-setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/LML_SMB_removal/Data/FBL_shape")
-
-FBL_shape <- st_read("World_Lakes.shp")
-
-
-## Hab data classifications -----------------------
-
 
 ### Functions ---------------------
 # Function to calculate distance matrix
@@ -56,11 +43,16 @@ reorder_points <- function(df) {
 
 ### Dataset
 
-# Set working directry
-setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
+
+## Data loading
+
+## Historical Habitat Classifications ----------------
+habs = read.csv("Data/habs.csv") %>% 
+  select(-X)
 
 ## gps points from habitat features
 gps = read.csv("Data/CCA_data/garmin_lml_hab_day2.csv")
+
 
 # set of points to create pairs for joining gps and features together
 points = data.frame(ID1 = rep(1:1100, each = 1100), 
@@ -80,11 +72,11 @@ distance_pairs = points %>%
          "name2" = "name") %>%
   mutate(dist = distHaversine(cbind(lon1, lat1), cbind(lon2, lat2))) 
 
-## Read in the data sheets and replace any codes that need changing
+## Read in the data sheets and replace any codes that need changing (both lakes)
 substrate = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
   filter(is.na(start) == F) %>%
   filter(MEA == "MEA") %>%
-  #filter(density > 2) %>%
+  mutate(feature = str_replace(feature, "R", "C")) %>% ## Rocks must be cobbles across site 1
   mutate(feature = str_replace(feature, "A", "SV")) %>%
   mutate(feature = str_replace(feature, "SBR","B")) %>%
   mutate(feature = str_replace(feature, "SCS", "SC")) %>%
@@ -94,19 +86,22 @@ substrate = read.csv("Data/CCA_data/habitat_class1.csv") %>%
   mutate(feature = str_replace(feature, "SC", "C")) %>%
   mutate(feature = str_replace(feature, "GRSVVEL", "G")) %>%
   mutate(feature = str_replace(feature, "SW", "SV")) %>%
-  mutate(feature = str_replace(feature, "SE", "SV"))
+  mutate(feature = str_replace(feature, "SE", "SV")) %>%
+  mutate(end = as.numeric(end), ## Will produce error its turning "MISSING" into an NA
+         start = as.numeric(start)) %>%
+  filter(feature != "G") ## Removing gravel
 
 ## Now join the distances with the substrate assignments to calculate total habitat lengths
 whole = substrate %>%
-  mutate(end= as.numeric(end), 
-         start = as.numeric(start)) %>%
   left_join(distance_pairs, by = c("start" = "ID1", "end" = "ID2")) 
 
+substrate %>% 
+  filter(water == "FBL") %>%
+  filter(grepl("LML", site))
 
 
-## Site_length for FBL
+## Site_length for both lakes
 site_lengths = substrate %>% group_by(water, site) %>%
-  mutate(end = as.numeric(end)) %>% 
   summarize(ID1 = min(start),
             ID2= max(end, na.rm = T)) %>%
   mutate(ID2.1 = case_when(site == "BEF.FBL.009" ~ 1022, ## End points
@@ -126,17 +121,64 @@ site_lengths = substrate %>% group_by(water, site) %>%
                            site == "BEF.FBL.001" ~ 1028)) %>%
   mutate(ID1 = case_when(ID1.1 > 1000 ~ ID1.1, TRUE ~ ID1),
          ID2 = case_when(ID2.1 > 1005 ~ ID2.1, ID2.1 == 246 ~ ID2.1, TRUE ~ ID2)) %>%
-  
   left_join(distance_pairs, by = c("ID1", "ID2")) %>%
-  select(site, ID1, ID2, dist) %>%
+  select(water, site, ID1, ID2, dist) %>%
   rename("shoreline" = "dist") 
 
 
+## Creating some variable for coarse woody debris ---------------
+
+tree_density_habitat = whole %>% left_join(site_lengths, by = "site") %>%
+  filter(feature == "CW") %>%
+  group_by(site, feature, shoreline) %>%
+  summarize(total_hab = sum(dist)) %>%
+  mutate(total.tree.count = 10 * (total_hab)/50) %>%  ## If I assume there are 10 trees in 50 m of dense tree habitat
+  mutate(MEA = "MEA")
+
+
+wood_counts = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
+  group_by(water, site, feature)%>%
+  filter(feature == "CW")  %>%
+  filter(MEA == "MEA") %>%
+  left_join(tree_density_habitat) %>%
+  summarize(sum_feature = n()) %>%
+  ungroup() %>%
+  group_by(water) %>%
+  complete(site, feature) %>%    
+  mutate(across(everything(), ~ replace_na(.x, 0))) %>%
+  filter(feature == "CW") %>%
+  ungroup() %>%
+  left_join(site_lengths %>% ## Calculate the number of trees per 
+              select(site, shoreline)) %>%
+  mutate(density = (sum_feature / shoreline )* 100) %>%
+   mutate(CW = case_when(
+    density == 0 ~ 0,  # zeros are rank 0
+    TRUE ~ as.numeric(cut(
+      density,
+      breaks = c(-Inf,
+                 quantile(density[density > 0], probs = c(0.2,0.4,0.6,0.8)),
+                 Inf),
+      labels = 1:5,
+      right = TRUE
+    )) - 1  # subtract 1 so non-zero ranks are 1–4
+  )) %>%
+  select(water, site, CW) %>% 
+  ungroup() 
+
+wood_counts = wood_counts%>%
+  rbind(.,whole %>% ## This will bind in a frame that adds in wood for all sites where none was observed
+  select(water, site) %>%
+  unique() %>% arrange(site) %>% 
+  filter(site %nin% wood_counts$site) %>% 
+  mutate(CW = 0)) %>%
+  arrange(water, site) ## Arrange it to visualize
+  
+ 
 
 ### FBL ----------------------------
+
 FBL_ids = substrate %>% 
   filter(water == "FBL", MEA == "MEA") %>%
-  
   mutate(end = as.numeric(end)) %>% 
   pivot_longer(c(start, end),
                names_to = "class", 
@@ -211,89 +253,53 @@ for(i in 1:length(site_lengths$ID1)){
   }
 } 
 
-whole %>%
-  filter(water == "FBL") %>%
-  left_join(site_lengths %>% filter(water == "FBL"), by = "site")%>%
-  group_by(site, feature, shoreline) %>%
-  select(dist, everything()) %>% 
-  summarize(total_hab = sum(dist)) %>%
-  mutate(percent_shoreline = total_hab / shoreline * 100)  %>%
-  separate(site, into = c("gear","water","site")) %>%
-  mutate(percent_shoreline = case_when(percent_shoreline > 100 ~ 100, 
-                                       TRUE ~ percent_shoreline)) %>%
-  ggplot(aes(x = site, y = percent_shoreline, fill =  feature)) + 
-  geom_bar(stat = "identity") + 
-  facet_wrap(~feature) 
 
-
-
-## Creating some variable for coarse woody debris 
-
-tree_density_habitat = whole %>% left_join(site_lengths, by = "site") %>%
-  filter(feature == "CW") %>%
-  group_by(site, feature, shoreline) %>%
-  summarize(total_hab = sum(dist)) %>%
-  mutate(total.tree.count = 10 * (total_hab)/50) %>%  ## If I assume there are 10 trees in 50 m of dense tree habitat
-  mutate(MEA = "MEA")
-
-
-wood_counts = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
-  group_by(water, site, feature)%>%
-  filter(feature == "CW")  %>%
-  
-  #filter(is.na(start) == T) %>%
-  filter(MEA == "MEA") %>%
-  left_join(tree_density_habitat) %>%
-  summarize(sum_feature = n()) %>%
+env_updated_LML = whole_lml %>%
+  group_by(site, feature) %>%
+  mutate(max_feature = max(density)) %>%
   ungroup() %>%
-  group_by(water) %>%
-  complete(site, feature) %>%    
-  mutate(across(everything(), ~ replace_na(.x, 0))) %>%
-  filter(feature == "CW") %>%
+  group_by(site,feature, max_feature, shoreline) %>%
+  summarize(total_hab = sum(total_hab)) %>%
+  mutate(percent_shoreline = total_hab / shoreline * 100) %>%
   ungroup() %>%
-  left_join(site_lengths %>% ## Calculate the number of trees per 
-              select(site, shoreline)) %>%
-  mutate(density = (sum_feature / shoreline )* 100) %>%
-   mutate(CW = case_when(
-    density == 0 ~ 0,  # zeros are rank 0
-    TRUE ~ as.numeric(cut(
-      density,
-      breaks = c(-Inf,
-                 quantile(density[density > 0], probs = c(0.2,0.4,0.6,0.8)),
-                 Inf),
-      labels = 1:5,
-      right = TRUE
-    )) - 1  # subtract 1 so non-zero ranks are 1–4
-  )) %>%
-  select(water, site, CW)
+  ## If a feature is only 1 it is considered scattered and gets a density of 1 even if it composes entire site lengths
+  ## All other features get binned together despite density (density 2 is counted same as density 5)
+  mutate(f_score = case_when(max_feature == 1 ~ 1, 
+                             max_feature > 1 ~ .bincode(percent_shoreline,
+                                                        breaks = c(0,20,40,60,80, 110)))) 
   
   
-  
-
-
-  
-
-
-
 
 
 ## Creating little table for the CCA
-env_updated_FBL = whole %>% left_join(site_lengths, by = "site") %>%
-  group_by(site, feature, shoreline) %>%
+env_updated_FBL = whole %>% 
+  filter(water == "FBL") %>%
+  left_join(site_lengths, by = c("site", "water"))  %>%
+  mutate(density = case_when(density > 1 ~ 2,
+                             density == 1 ~ 1))  %>%
+  group_by(water, site, feature, shoreline, density) %>%
   summarize(total_hab = sum(dist)) %>%
-  mutate(percent_shoreline = total_hab / shoreline * 100)  %>%
-  #separate(site, into = c("gear", "water", "site_n"), remove = F) %>%
-  select(site,  feature, percent_shoreline) %>%
-  mutate(f_score = .bincode(percent_shoreline, breaks = c(0,25,50,75,110))) %>%
-  select(-percent_shoreline)%>% 
+  ungroup() %>%
+  group_by(water, site, feature) %>%
+  mutate(max_feature = max(density)) %>%
+  ungroup() %>%
+  group_by(water, site,feature, max_feature, shoreline) %>%
+  summarize(total_hab = sum(total_hab)) %>%
+  mutate(percent_shoreline = total_hab / shoreline * 100) %>%
+  ungroup() %>%
+  ## If a feature is only 1 it is considered scattered and gets a density of 1 even if it composes entire site lengths
+  ## All other features get binned together despite density (density 2 is counted same as density 5)
+  mutate(f_score = case_when(max_feature == 1 ~ 1, 
+                             max_feature > 1 ~ .bincode(percent_shoreline,
+                                                        breaks = c(0,20,40,60,80, 110)))) %>%
+  select(-percent_shoreline, -max_feature, -shoreline, -total_hab) %>% 
   
   pivot_wider(values_from = f_score, names_from = feature) %>%    
   mutate(across(everything(), ~ replace_na(.x, 0))) %>%
   rename("SITE_N" = "site") %>%
   select(-CW) %>%
-  mutate(water = "FBL") %>%
   left_join(wood_counts , by = c("SITE_N" = "site", "water")) %>%
-  filter(water == "FBL") %>%
+
   mutate(CW = ifelse(is.na(CW), 0, CW)) %>%
   select(water, everything())
   
@@ -304,8 +310,8 @@ env_updated_FBL = whole %>% left_join(site_lengths, by = "site") %>%
 ## Trying to decide on new hab classes save below
 FBL_updated_sub =env_updated_FBL  %>%
   left_join(habs)  %>% 
-  select(SITE_N,Habitat,  C, B, G, EV, CW) %>%
-  mutate(rock_habitat = pmax(C, G)) %>%
+  select(SITE_N,Habitat,  C, B, EV, CW) %>%
+  mutate(rock_habitat = pmax(C)) %>%
     mutate(macrohab = case_when(
     (B <= 1 & C <= 1) ~ "S", 
     (B <= 1 & C >= 2) ~ "RS", ## cobble fields with low structure,
@@ -376,28 +382,18 @@ ggsave(file = "Figures_Tables/Testing Habitat/FBL_habitat_table.jpeg", width = 8
 # Set working directory
 setwd("C:/Users/monta/OneDrive - Airey Family/GitHub/crispy-bassoon/")
 # Pull together df with substrate information and waypoints
-substrate = read.csv("Data/CCA_data/habitat_class1.csv") %>% 
+substrate.lml = substrate %>% 
   filter(water == "LML") %>%
-  filter(is.na(start) == F)  %>%
-  mutate(feature = str_replace(feature, "A", "SV")) %>%
-  mutate(feature = str_replace(feature, "SBR","B")) %>%
-  mutate(feature = str_replace(feature, "SCS", "SC")) %>%
-  mutate(feature = str_replace(feature, "SB", "B")) %>%
-  mutate(feature = str_replace(feature, "SCD", "SC"))%>%
-  mutate(feature = str_replace(feature, "SC", "C")) %>%
-  mutate(feature = str_replace(feature, "GRSVVEL", "G")) %>%
-  mutate(feature = str_replace(feature, "SW", "SV")) %>%
-  mutate(feature = str_replace(feature, "SE", "SV"))
+  filter(is.na(start) == F)  
 
 # get the start and end points for each site
-site_lengths = substrate %>% group_by(water, site) %>%
-  mutate(end = as.numeric(end)) %>% 
+site_lengths.lml = substrate.lml %>% 
+  group_by(water, site) %>%
   summarize(ID1 = min(start),
             ID2= max(end, na.rm = T)) %>% filter(water == "LML")
+
 # IDs for each site
-LML_ids = substrate %>% 
-  filter(water == "LML") %>%
-  mutate(end = as.numeric(end)) %>% 
+LML_ids = substrate.lml %>%
   pivot_longer(c(start, end),
                names_to = "class", 
                values_to = "name") %>%
@@ -436,55 +432,25 @@ site_lengths = site_lengths %>% na.omit()
 
 site_lengths %>% print(n = 100)
 
-site_lengths[21, "ID1"] = 665
+!!site_lengths[21, "ID1"] = 665 ## I think i need to double check why this is framed like this
 
 
 gps %>% filter(ID == 678) 
    
-
-
-
 # write csv for LML sites
 #write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
 #write.csv(site_lengths, "Data/LML_SiteLenghts.csv")
-for(i in 1:length(site_lengths$ID1)){
+
+for(i in 1:length(site_lengths.lml$ID1)){
   
-  frame = df_ordered %>% filter(ID1 <= site_lengths$ID2[i] & ID1 >= site_lengths$ID1[i] ) %>%
+  frame = df_ordered %>% filter(ID1 <= site_lengths.lml$ID2[i] & ID1 >= site_lengths.lml$ID1[i] ) %>%
     mutate(dist = distHaversine(cbind(lon1, lat1), cbind(lag(lon1), lag(lat1)))) %>%
     na.omit()
   
-  site_lengths$shoreline[i] = sum(frame$dist)
+  site_lengths.lml$shoreline[i] = sum(frame$dist)
   
   
 }  
-
-
-
-whole = substrate %>%
-  mutate(end= as.numeric(end), 
-         start = as.numeric(start)) %>%
-  left_join(distance_pairs, by = c("start" = "ID1", "end" = "ID2")) 
-
-
-
-whole_lml = whole %>%
-  #filter(water == "LML") %>%
-  left_join(site_lengths %>% 
-              filter(water == "LML"),
-            by = "site") %>%
-  #filter(density > 1) %>% ## Filter out low density habitats
-  group_by(site, feature, shoreline) %>%
-  summarize(total_hab = sum(dist)) %>%
-  mutate(percent_shoreline = total_hab / shoreline * 100)  %>%
-  separate(site, into = c("gear","site_num"), remove = F)
-
-whole_lml  %>%
-  separate(site, into = c("gear", "wate", "site")) %>%
-  mutate(site_num = parse_number(site))  %>%
-  ggplot(aes(x = site_num, y = percent_shoreline, fill =  feature)) + 
-  geom_bar(stat = "identity") + 
-  facet_wrap(~feature) 
-
 ## Plotting Little Moose
 ggplot() +
   geom_path(data = df_ordered, aes(x = lat1, y = lon1)) +
@@ -493,32 +459,53 @@ ggplot() +
             col = "red") +
   scale_x_reverse()
 
-site_lengths$shoreline %>% sum()
 
- 
+## Trying to modify by density
+whole_lml = whole %>% ## filtered LML dataset
+  filter(water == "LML") %>%
+  left_join(site_lengths %>% 
+              filter(water == "LML"),
+            by = "site") %>%
+  
+  mutate(density = case_when(density > 1 ~ 2,
+                             density == 1 ~ 1)) %>%
+  group_by(site, shoreline, feature, density) %>%
+  summarize(total_hab = sum(dist))  %>%
+  ungroup() 
 
 
-## Creating little table for the CCA
-env_updated_LML = whole_lml %>% left_join(site_lengths, by = "site") %>%
-  select(site,  feature, percent_shoreline) %>%
-  mutate(f_score = .bincode(percent_shoreline, breaks = c(0,25,50,75,110))) %>%
-  select(-percent_shoreline) %>%
+
+## density duplicate of what is below
+env_updated_LML = whole_lml %>%
+  group_by(site, feature) %>%
+  mutate(max_feature = max(density)) %>%
+  ungroup() %>%
+  group_by(site,feature, max_feature, shoreline) %>%
+  summarize(total_hab = sum(total_hab)) %>%
+  mutate(percent_shoreline = total_hab / shoreline * 100) %>%
+  ungroup() %>%
+  ## If a feature is only 1 it is considered scattered and gets a density of 1 even if it composes entire site lengths
+  ## All other features get binned together despite density (density 2 is counted same as density 5)
+  mutate(f_score = case_when(max_feature == 1 ~ 1, 
+                             max_feature > 1 ~ .bincode(percent_shoreline,
+                                                        breaks = c(0,20,40,60,80, 110)))) %>%
+  select(site, feature, f_score) %>%
   pivot_wider(values_from = f_score, names_from = feature) %>%    
   mutate(across(everything(), ~ replace_na(.x, 0))) %>%
   rename("SITE_N" = "site") %>%
-  left_join(wood_counts) %>% ## Join in the woody debris data table
-  filter(water == "LML") %>%
-  select(-water, -site)
-
-## Saved old criteria as im playing around with this
-
+  select(-CW) %>% ## remove because we've already established CW in separate dataframe
+  ## Join in the woody debris data table
+  left_join(wood_counts %>% filter(water == "LML"), by = c("SITE_N" = "site")) %>% 
+  select(SITE_N,  FW, CW, O, SV, EV, C, B,  BED)
 
 
-updated_habs.LML= env_updated_LML %>%
+## New site classifications
+
+updated_habs.LML = env_updated_LML %>%
   left_join(habs) %>% 
-  select(SITE_N,Habitat,  C, B, G, EV, CW) %>%
+  select(SITE_N, Habitat,  C, B,  EV, CW) %>%
   unique() %>%
-  mutate(rock_habitat = pmax(C, G)) %>%
+  mutate(rock_habitat = pmax(C)) %>%
     mutate(macrohab = case_when(
     (B <= 1 & C <= 1) ~ "S", 
     (B <= 1 & C >= 2) ~ "RS", ## cobble fields with low structure,
@@ -547,25 +534,27 @@ updated_habs.LML= env_updated_LML %>%
                               new_hab == "RSW" & Habitat == "S" ~ "MS + WD"))
 
 
+## For the changepoints
 write.csv(updated_habs.LML, "Data/updated_habs_LML.csv", row.names = F) ## New habitat data
 
+## For the lmer
+write.csv(env_updated_LML, "Data/LML_habitat.csv", row.names = F)
 
-write.csv(env_updated_LML, "Data/LML_habitat.csv")
-
-
-env_updated_long.LML <- env_updated_LML %>%
+## For the supplementary heatmap below ----------
+env_updated_long.LML = env_updated_LML %>%
   select(-BED) %>%
   filter(grepl("LML", SITE_N)) %>%
   pivot_longer(
-    cols = R:CW,            # all habitat columns
+    cols = FW:B,            # all habitat columns
     names_to = "Habitat",
     values_to = "Rank"
-  ) %>% filter(Habitat %nin% c("S", "G", "R")) %>%
+  ) %>% filter(Habitat %nin% c("S")) %>%
   mutate(
     Habitat = factor(Habitat, levels = c("C","B","BED","EV","SV","O","CW","FW")),
     SITE_N = factor(SITE_N, levels = unique(SITE_N))  # keeps original order
   ) %>%
-  mutate(SITE_N = factor(SITE_N, levels = rev(levels(SITE_N))))
+  mutate(SITE_N = factor(SITE_N, levels = rev(levels(SITE_N)))) %>% 
+  filter(Habitat %in% c("FW", "CW", "O", "SV","EV","C","B"))
 
 # Column-wise heatmap
 ggplot() +

@@ -23,8 +23,9 @@ pal_con = wes_palette("Zissou1", type ="continuous")
 
 # Labels for plotting
 water_labels = c("FBL" = "First Bisby", "LML" = "Little Moose")
-facet_data = data.frame(WATER = c("FBL", "LML"), 
-                        YEAR = c(2003, 2000))
+facet_data = data.frame(WATER = c("LML", "FBL"), 
+                        YEAR = c(2000, 2003)) %>%
+  mutate(WATER = factor(WATER, levels = c("LML", "FBL")))
 
 ## Alpha diversity ---------------------
 
@@ -54,19 +55,21 @@ cpue_alphadiv = CPUE.w.sec %>%
 
 ##
 alpha_graph = cpue_alphadiv %>%
+  mutate(WATER = factor(WATER, levels = c("LML", "FBL"))) %>%
   ggplot(aes(x = as.numeric(Year), 
              y = as.numeric(alpha_div), col = HAB_1)) +
   geom_jitter(alpha = .2) + 
-  facet_wrap(~WATER, labeller = labeller(WATER = water_labels))+ 
+  facet_wrap(~WATER, labeller = labeller(WATER = c("LML" = "Little Moose", "FBL" = "First Bisby"))) + 
   ylim(0,10) + 
-  theme_minimal(base_size = 14) +
+  theme_minimal(base_size = 12) +
   geom_vline(data = facet_data, aes(xintercept =YEAR), linetype = 2) +
   geom_smooth(method = "lm", se = F, lwd = 1.25) + 
   scale_color_manual(labels = c( "Rock","Wood + Rock","Fine Sediment",
                                  "Wood + Fine Sediment"), values = pal[1:4]) +
   labs(col = "Habitat") + 
   ylab("Alpha Diversity") +
-  xlab("Year")
+  xlab("Year") + 
+  theme(axis.text.x = element_text(angle = 45))
 
 
 ## Temporal alpha diversity per site 
@@ -105,103 +108,13 @@ slopes = summary(slopes) %>%
 
 #write.csv(slopes, file = "Figures_Tables/TemporalDiversityData/AlphaDiv_slopes_LML.csv")
 
-## Shannon Diversity ----------------------
-shannon = CPUE.w.sec %>% 
-  mutate(diversity = diversity(., index = "shannon")) %>%
-  rownames_to_column(var = "Site") %>% 
-  separate(Site, into = c("Year", "SITE_N"), sep = "_") %>%
-  #mutate(Site = as.numeric(Site)) %>%
-  left_join(habs) %>%
-  separate(SITE_N, into = c("GEAR", "WATER", "Y", "SI"), remove = F) %>%
-  select(-Y, -SI) %>%
-  rename(HAB_1 = Habitat) %>%
-  group_by(WATER, Year, HAB_1) %>% 
-  select(WATER, Year, SITE_N, HAB_1, diversity,  everything()) %>%
-  filter(WATER == "FBL" & Year > 2003 | WATER == "LML" & Year > 2000) %>%
-  # filter(WATER == "LML") %>% ## Rewrite this filter to pick one lake or the other for the normality test below. Otherwise comment it out
-  select(WATER, Year, SITE_N, HAB_1,diversity) %>%
-  mutate(sig = case_when(HAB_1 == "RW" & WATER == "FBL" ~ "sig",
-                         HAB_1 == "S" & WATER == "FBL" ~ "sig",
-                         HAB_1 == "SW" & WATER == "FBL" ~ "sig",
-                         HAB_1 == "SW" & WATER == "LML" ~ "sig")) %>%
-  ungroup() %>%
-  mutate(HAB_1 = as.factor(HAB_1) )%>%
-  mutate(sig = case_when(sig == "sig" ~ "sig", is.na(sig) ~ "znot")) %>% 
-  mutate(WATER = factor(WATER, levels = c( "LML","FBL"))) # %>%
-  # mutate(HAB_1 = relevel(HAB_1, ref = "SW")) %>% ## Only scale for the normality test below. Not for plotting/visualizing
-  mutate(Year = scale(as.numeric(Year), center = TRUE, scale = FALSE))
-
-shannon_graph = shannon %>%
-  filter(Year > 1998, HAB_1 != "NA") %>%
-  ggplot(aes(x = as.numeric(Year),
-             y = diversity,
-             col = HAB_1, 
-             linetype = sig),
-         key_glyph = "rect") + 
-  geom_jitter(alpha = .2) + 
-  geom_vline(data = facet_data %>%
-               mutate(WATER = factor(WATER, levels = c("LML", "FBL"))), aes(xintercept =YEAR), linetype = 2) +
-  geom_smooth(method = lm, se = F) + 
-  theme_minimal(base_size = 14) + 
-  ylab("Shannon Diversity") + 
-  xlab("Year") + 
-  labs(col = "Habitat") + 
-  scale_color_manual(labels = c("Rock","Rock + Wood","Sediment",
-                                "Sediment + Wood"), 
-                     values = pal[1:4] ) +
-  facet_wrap(~WATER, labeller = labeller(WATER = water_labels)) +
-  guides(linetype = "none")
 
 
 
 
 
 
-## Shannon Diversity Normality tests
 
-#### For the normality tests you have to go back up into `shannon` and remove the # from two lines
-shannon.resid = cpue_alphadiv %>%
-  filter(WATER == "FBL", HAB_1 == "S") %>%
-  rename(diversity = alpha_div)
-# View the residuals
-hist(shannon.resid$diversity)
-qqnorm(shannon.resid$diversity)
-qqline(shannon.resid$diversity)
-
-## Shapiro-Wilk normality test
-shapiro.test(shannon.resid$diversity)
-
-
-library(lmerTest)
-
-
-shannon_model = lmer(diversity ~ (Year) * HAB_1  + (1 | SITE_N),
-                      data = shannon )
-
-
-shannon.dat = summary(shannon_model)
-AIC(shannon_model)
-shannon.dat = shannon.dat$coefficients %>%
-  as.data.frame() %>%
-  mutate(sig = case_when(`Pr(>|t|)` <= .001 ~ "***",
-                         `Pr(>|t|)` <= .01 ~ "**",
-                         `Pr(>|t|)` <= .05 ~ "*",
-                         `Pr(>|t|)` > .05 ~ ""))
-### Table S3 --------------
-#write.csv(shannon.dat, file = "Figures_Tables/TemporalDiversityData/Shannon_Model_Coef_FBL.csv")
-
-shannon.slopes = emtrends(shannon_model, ~ HAB_1, var = "Year", delta.var = 1)
-
-shannon.slopes = summary(shannon.slopes) %>%
-  mutate(percent_change = round(((Year.trend)) * 100, digits = 2), 
-         lower.CL = round(((lower.CL) )* 100, digits = 2), 
-         upper.CL = round(((upper.CL))* 100, digits = 2), 
-         SE = round(SE, digits = 2)) %>%
-  select(-df) %>%
-  mutate(cred = paste("[", lower.CL, ", ", upper.CL, "]", sep = ""))
-
-
-#write.csv(shannon.slopes, file = "Figures_Tables/TemporalDiversityData/shannon_slopes_FBL.csv")
 
 ## Ratios ----------------------------
 
@@ -240,7 +153,7 @@ ratios = CPUE.w.sec %>%
 
 ratios_graphs = ratios   %>%
   ggplot(aes( x = as.numeric(Year), y = native_ratio, col = HAB_1)) + 
-  theme_minimal(base_size = 14) + 
+  theme_minimal(base_size = 12) + 
   geom_point(alpha = .3) + 
   geom_smooth(aes(linetype = sig),method = 'lm', se = F) +
   geom_vline(data = facet_data %>% 
@@ -253,13 +166,16 @@ ratios_graphs = ratios   %>%
   labs(col = "Habitat") + 
   facet_wrap(~WATER, labeller = labeller(WATER = c("LML"="Little Moose", "FBL" = "First Bisby"))) +
   scale_y_log10() + 
-  guides(linetype = "none")
+  guides(linetype = "none") + 
+  theme(axis.text.x = element_text(angle = 45))
 
 
-### Figure 3 combination of all 3 graphs
+### Figure 3 combination of both graphs --------------------
+library(patchwork)
 
-alpha_graph / shannon_graph / ratios_graphs 
+alpha_graph / ratios_graphs 
 
+ggsave("Figures_Tables/Figure2_TemporalDiversity1.jpeg", width = 6, height = 6, dpi = 600)
 
 ## Are data normally distributed 
 ratios %>%

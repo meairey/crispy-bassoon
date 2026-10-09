@@ -272,27 +272,30 @@ LML.v2 %>%
   ungroup() %>%
  # reframe(unique(interaction))
   ggplot(aes(x = as.numeric(Year), y = ((mean_CPUE))+1, fill = interaction, col = interaction)) + 
-  theme_classic() +
+  theme_classic(base_size = 11) +
   theme(strip.background = element_blank()) +
-  geom_area(position = "identity", alpha = .00001, size = 1)+ 
+  geom_area(position = "identity", alpha = .00001, size = .5)+ 
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   #scale_y_log10() + 
   facet_wrap(~SP, scales = "free_y", labeller = labeller(SP = labels), ncol = 2) +
   
   theme(axis.text.x = element_text(angle= 90, vjust = .5),
         legend.position = "bottom", 
-        legend.title = element_blank()) +
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.25, "cm")) + # Make legend keys smaller (default is usually ~1.2cm)) 
   xlab("") + 
   ylab("CPUE (ind/hour)") +
    
   geom_vline(aes(xintercept = YEAR, col = interaction),
-             data = cp_lines.LML, size = 1.5, linetype = 2) +
+             data = cp_lines.LML, size = 1, linetype = 2) +
   geom_vline(aes(xintercept = 2000), col = "black", linetype = 1, size = .5) +
   scale_color_manual(guide = "none", 
                      values =  wes_palette("Darjeeling1", type = "c", n = 8)) +
-  scale_fill_manual(values =  wes_palette("Darjeeling1", type = "c", n = 8)) 
+  scale_fill_manual(values =  wes_palette("Darjeeling1", type = "c", n = 8)) + 
+  guides(color = guide_legend(nrow = 4, byrow = TRUE))
 
-
+ggsave(file = "Figures_Tables/LML_changepoint_modified.pdf", width = 4, height = 5)
 
 ### Trying in FBL
 
@@ -540,10 +543,56 @@ FBL_v2 %>%
   geom_vline(aes(xintercept = 2003), col = "black", linetype = 1, size = .5) +
   scale_color_manual(guide = "none", 
                      values =  wes_palette("Darjeeling1", type = "c", n = 8)) +
-  scale_fill_manual(values =  wes_palette("Darjeeling1", type = "c", n = 8)) 
+  scale_fill_manual(values =  wes_palette("Darjeeling1", type = "c", n = 8)) + 
+  guides(color = guide_legend(nrow = 4, byrow = TRUE))
+
+ggsave(file = "Figures_Tables/LML_changepoint_modified.pdf", width = 4, height = 5)
+
+### Trying a crazy combined graph ----------
+removal_starts = data.frame(WATER = factor(c("LML", "FBL"), levels = c("LML", "FBL")),
+                               year.start = c(2000, 2003))
+
+FBL_v2 %>% 
+  separate(Species, into = c("Sp", "Age"), remove = F) %>%
+  rename(SITE = SITE_N) %>%
+  select(Year, ID, SITE, Sp, Age, Species, value, HAB_1, WATER) %>%
+  rbind(LML.v2 %>% mutate(WATER = "LML"))  %>%
+  filter(Sp %in% c("CC","CS","PS","WS","SMB","MM")) %>%
+  group_by(WATER, Year, HAB_1, Species, Sp, Age) %>%
+  summarize(mean_CPUE = mean(value)) %>%
+  mutate(HAB_1 = replace(HAB_1, HAB_1 == "R", "Complex")) %>%
+  mutate(HAB_1 = replace(HAB_1, HAB_1 == "RW", "Complex + woody")) %>%
+  mutate(HAB_1 = replace(HAB_1, HAB_1 == "S", "Low complexity")) %>%
+  mutate(HAB_1 = replace(HAB_1, HAB_1 == "SW", "Low complexity + woody")) %>%
+  mutate(interaction = interaction(HAB_1, Age),
+         WATER = factor(WATER, levels = c("LML", "FBL"))) %>%
+  left_join(removal_starts) %>%
+  ggplot(aes(x = as.numeric(Year), y = ((mean_CPUE))+1, fill = interaction, col = interaction)) + 
+  theme_minimal() +
+  geom_area(position = "identity", alpha = .00001, size = 1)+ 
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) + 
+  facet_wrap(~WATER + Sp, scales = "free_y", labeller = labeller(Sp = labels, WATER = c("LML" = "Little Moose", "FBL" = "First Bisby"))) +
+ 
+  theme(axis.text.x = element_text(angle= 90, vjust = .5),
+        legend.position = "bottom", 
+        legend.title = element_blank(), 
+        legend.text = element_text(size = 9)) +
+  xlab("") + 
+  ylab("CPUE (ind/hour)") + 
+  scale_color_manual(guide = "none", 
+                     values =  wes_palette("Darjeeling1", type = "c", n = 8)) +
+  scale_fill_manual(values =  wes_palette("Darjeeling1", type = "c", n = 8)) + 
+  geom_vline(data = rbind(cp_lines.FBL %>% mutate(WATER = "FBL"),
+                          cp_lines.LML %>% mutate(WATER = "LML")) %>%
+               rename(Sp = SP) %>%
+               mutate(WATER = factor(WATER, levels = c("LML","FBL"))), 
+             aes(xintercept = YEAR, col = interaction)) +
+  geom_vline( mapping = aes(xintercept = year.start), lty = "dashed")
 
 
-library(lmerTest)
+ggsave(file = "Figures_Tables/Compound_changepoint.jpeg", width = 7, height = 6, dpi = 700)
+
+library(lmerTest)library(lmerTest)cp_lines.LML
 ## Linear mixed effects model
 lmer.testFBL = v_mod %>% mutate(value_round = round(value, digits = 0)) %>% 
       filter(Year > 2000) %>%
