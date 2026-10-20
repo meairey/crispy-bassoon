@@ -112,7 +112,8 @@ LML.habs = read.csv("Data/updated_habs_LML.csv") ## this is the mixed substrate 
 ## Intermediate to go into LML.CPUE.w.sec
 ### Note 31626 I am altering the below lengths for a simulation on CP stability vs. age breakpoint
 LML_data = LML_unfiltered %>% filter(SPECIES %nin% remove) %>% 
-  mutate(LENGTH = case_when(SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,71.4,5000)),
+  mutate(LENGTH = case_when(SPECIES %in% c("BB") ~ .bincode(LENGTH, breaks = c(0,100,5000)),
+                            SPECIES %in% c("MM") ~.bincode(LENGTH, breaks = c(0,71.4,5000)),
                             SPECIES %in% c("CS") ~ .bincode(LENGTH, breaks = c(0,70,50000)),
                             SPECIES %in% c("PS") ~ .bincode(LENGTH, breaks = c(0,70,50000)),
                             SPECIES %in% c("WS") ~ .bincode(LENGTH, breaks = c(0,100,50000)),
