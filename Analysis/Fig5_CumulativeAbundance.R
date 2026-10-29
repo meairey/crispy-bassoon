@@ -9,37 +9,43 @@ library(lmerTest)
 library(dplyr)
 library(ineq)
 library(wesanderson)
+library(emmeans)
 
-
+### Right now I'm using data generated in the script data_processing_removingpre2000.R
 ## Prep Data ----
 ## First Bisby data
-load("Data/ChangePoint_Data/FBL_v.RData") ## Generated in Fig4_changepoint_analysis.R
+load(file = "Data/ChangePoint_Data/FBL_v2.RData") ## Generated in Fig4_changepoint_analysis.R
 FBL_v = FBL_v %>% 
-  rename(SITE = SITE_N) %>%
-  select(Year, ID, Species, value, HAB_1, SITE, WATER) %>%
+  #rename(SITE_N = SITE) %>%
+  mutate(WATER = "FBL") %>%
+  select(Year, Species, value, HAB_1, SITE_N, WATER) %>%
   filter(Year > 2003)
 
 ## Little Moose data
-load("Data/ChangePoint_Data/LMLV.Rdata") ## Generated in Fig4_changepoint_analysis.R
+load(file = "Data/LML.v.post2000.RData") ## Generated in Fig4_changepoint_analysis.R
 LML.v = LML.v  %>%
-  select(Year, ID, Species, value, HAB_1, SITE )%>% 
+  select(Year,  Species, value, HAB_1, SITE_N )%>% 
   mutate(WATER = "LML") %>%
   filter(Year > 2000, 
          !grepl("RT", Species)) 
 
 
-labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker", "ST" = "brook trout", "LLS" = "Atlantic salmon", "LT" = "lake trout")
+labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudinnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker", "ST" = "brook trout", "LLS" = "Atlantic salmon", "LT" = "lake trout", 
+           "RS" = "rainbow smelt", "BB" = "brown bullhead")
 
 
 ## Combine both lakes for facet wrap
 v.combined = rbind(LML.v, FBL_v)
+LML.v$Species %>% unique()
+
+v.combined %>% filter(grepl("RS", Species))
 
 ## Geni Coeffficient -----------------------------------------------------------
 
 spatial_evenness =  v.combined %>% 
   filter(Year > 2000) %>%
   separate(Species, into = c("SP", "age"))%>% 
-  group_by(WATER, Year, SP, SITE) %>%
+  group_by(WATER, Year, SP, SITE_N) %>%
   summarize(sp_total = sum(value)) %>%
   ungroup() %>% 
   mutate(WATER = factor(WATER, levels = c("LML", "FBL"))) %>%
@@ -56,107 +62,118 @@ spatial_evenness =  v.combined %>%
 
 
 ## LMs to assess Gini Coefficient
-library(emmeans)
 
-## Little Moose Models
-lml.gini.mod = lm(gini ~  year.scaled*SP, data = spatial_evenness %>% filter(WATER == "LML")) 
-summary(lml.gini.mod)
+models.gini = spatial_evenness %>%
+  group_by(WATER) %>%
+  nest() %>%
+  mutate(
+    model = map(data, ~ lm(
+      gini ~ year.scaled*SP,
+      data = .x
+    ))
+  )
+models.gini$model[[1]] %>% summary()
 
 
-# Do the species differ in intercept from eachother (yes most do)
-emmeans(lml.gini.mod, pairwise ~ SP)
-# Do the species slopes differ from 0. in LML only pumpkinseed does
-lml.sig = emtrends(lml.gini.mod, ~ SP, var = "year.scaled") %>% 
-  as.data.frame() %>% 
-  mutate(sig = sign(lower.CL) == sign(upper.CL)) %>%
-  mutate(WATER = "LML")
+emmeans.gini = rbind(## Little Moose
+                      emmeans(models.gini$model[[1]], pairwise ~ SP)$emmeans %>%
+                       as.data.frame() %>%
+                       mutate(WATER = "LML"), 
+                     ## First Bisby
+                    emmeans(models.gini$model[[2]], pairwise ~ SP)$emmeans %>%
+                                           as.data.frame() %>%
+                                           mutate(WATER = "FBL")) %>% 
+  rename(estimate = emmean) %>%
+  mutate(name = "emmeans.gini")
 
-## First Bisby Models
-fbl.gini.mod = lm(gini ~  year.scaled*SP, data = spatial_evenness %>% filter(WATER == "FBL")) 
-summary(fbl.gini.mod)
 
-# Do the species differ in intercept from eachother (yes most do)
-emmeans(fbl.gini.mod, pairwise ~ SP)
+contrasts.gini = rbind(## Little Moose
+                      emmeans(models.gini$model[[1]], pairwise ~ SP)$contrasts %>%
+                       as.data.frame() %>%
+                       mutate(WATER = "LML"), 
+                     ## First Bisby
+                    emmeans(models.gini$model[[2]], pairwise ~ SP)$contrasts %>%
+                                           as.data.frame() %>%
+                                           mutate(WATER = "FBL")) %>% 
 
-# Do the species slopes differ from 0. in LML only pumpkinseed does
-fbl.sig = emtrends(fbl.gini.mod, ~ SP, var = "year.scaled") %>% 
-  as.data.frame() %>% 
-  mutate(sig = sign(lower.CL) == sign(upper.CL)) %>%
-  mutate(WATER = "FBL") 
+  mutate(name = "contrasts.emmeans.gini")
 
-## Join emtrends for both lakes
-sig = rbind(lml.sig, fbl.sig) %>%
-  as.data.frame()
 
-## Supplemental emmeans + etrends table
+trends.gini = rbind(## Little Moose
+                    emtrends(models.gini$model[[1]], ~ SP, var = "year.scaled") %>% 
+                      as.data.frame() %>% 
+                     mutate(sig = sign(lower.CL) == sign(upper.CL)) %>%
+                      mutate(WATER = "LML"),
+                    ## First Bisby
+                    emtrends(models.gini$model[[2]], ~ SP, var = "year.scaled") %>% 
+                      as.data.frame() %>% 
+                     mutate(sig = sign(lower.CL) == sign(upper.CL)) %>%
+                      mutate(WATER = "FBL")
+                    ) %>% 
+  rename(estimate = year.scaled.trend) %>%
+  mutate(name = "trends.gini")
+        
+contrasts.trends.gini = rbind(## Little Moose
+                              pairs(emtrends(models.gini$model[[1]],
+                                       ~ SP,
+                                       var = "year.scaled")) %>% 
+                                as.data.frame() %>% 
+                                mutate(WATER = "LML"),
+                              ## First Bisby
+                              pairs(emtrends(models.gini$model[[2]],
+                                             ~ SP, 
+                                             var = "year.scaled")) %>% 
+                                as.data.frame() %>% 
+                                mutate(WATER = "FBL")
+                              ) %>%
+  mutate(name = "contrasts.trends.gini")
 
-Table.Supp.ETrends = sig %>% 
-    mutate(SP = str_replace_all(SP, c(
+contrasts = rbind(contrasts.gini, contrasts.trends.gini) %>%
+  mutate(across(estimate:p.value, ~round(.x, digits = 3)), 
+         p.value = case_when(p.value < .001 ~ "< 0.001", 
+                             p.value >= .001 ~ as.character(p.value))) %>%
+  ## replace lake names
+  mutate(WATER = str_replace_all(WATER, c("LML" = "Little Moose", 
+                                          "FBL" = "First Bisby")))
+
+estimates = rbind(emmeans.gini, trends.gini %>% 
+                    select(-sig)) %>%
+  mutate(across(estimate:upper.CL, ~round(.x, digits = 3)), 
+         )    %>%
+  mutate(SP = str_replace_all(SP, c( ## switch species codes for common names
     "CC" = "creek chub",
     "CS" = "common shiner",
     "MM" = "cenral mudminnow",
     "PS" = "pumpkinseed",
     "SMB" = "smallmouth bass",
-    "WS" = "white sucker"
+    "WS" = "white sucker",
+    "LT" = "lake trout", 
+    "BB" = "brown bullead", 
+    "RS" = "rainbow smelt"
   ))) %>%
   ## replace lake names
   mutate(WATER = str_replace_all(WATER, c("LML" = "Little Moose", 
-                                          "FBL" = "First Bisby"))) %>%
-  rename(Lake = WATER, ## rename columns for supplement table
-         Species = SP) %>% 
-  select(-sig) %>% ## remove extra significance column
-  mutate(across(year.scaled.trend:upper.CL, ~round(.x, digits = 3))) ## round all values
-
-## Write table
-write.csv(Table.Supp.ETrends,
-          file = "Figures_Tables/GeniCoefficient/SuppTable_GeniCoefficient_Trends.csv",
-          row.names = F)
+                                          "FBL" = "First Bisby"))) 
 
 
-FBL.emmeans = emmeans(fbl.gini.mod, pairwise ~ SP) ## Emmeans for first bisby
-
-LML.emmeans = emmeans(lml.gini.mod, pairwise ~ SP) ## Emmeans for Little Moose
-
-## Combine both emmeans into a joint table for supplement
-Table.Supp.Emmeans = rbind(FBL.emmeans$emmeans %>% as.data.frame() %>% mutate(Lake = "First Bisby"),
-      LML.emmeans$emmeans %>% as.data.frame() %>% mutate(Lake = "Little Moose")) %>% 
-      mutate(SP = str_replace_all(SP, c( ## switch species codes for common names
-    "CC" = "creek chub",
-    "CS" = "common shiner",
-    "MM" = "cenral mudminnow",
-    "PS" = "pumpkinseed",
-    "SMB" = "smallmouth bass",
-    "WS" = "white sucker"
-  ))) %>%
-  rename(Species = SP) %>% ## rename columns
-  mutate(across(emmean:upper.CL, ~round(.x, digits = 3))) ## round all values 
-
-## Write Table
-write.csv(Table.Supp.Emmeans,
-          file = "Figures_Tables/GeniCoefficient/SuppTable_GeniCoefficient_emmeans.csv",
-          row.names = F)
-
-## Contrasts
-
-contrasts = rbind(FBL.emmeans$contrasts %>% as.data.frame() %>% mutate(Lake = "First Bisby"),
-      LML.emmeans$contrasts %>% as.data.frame() %>% mutate(Lake = "Little Moose")) %>%
-  mutate(p.value = case_when(p.value < .001 ~ "< 0.001", 
-                             p.value < .01 ~ "< 0.01", 
-                             p.value >= 0.01 ~ as.character(round(p.value, digits = 3)))) %>%
-  mutate(across(estimate:t.ratio, ~round(.x, digits = 3)))
-
-## Write table 
-write.csv(contrasts,
-          file = "Figures_Tables/GeniCoefficient/SuppTable_GeniCoefficient_contrasts.csv", 
-          row.names = F)
+ write.csv(contrasts, "Figures_Tables/TemporalDiversityData/Geni.contrasts.csv", 
+           row.names = F)
+ write.csv(estimates, "Figures_Tables/TemporalDiversityData/Geni.estimates.csv",
+           row.names = F)
 
 
+
+
+
+
+removal.start = data.frame(WATER = factor(c("LML", "FBL"), levels = c("LML", "FBL")), 
+                           Year = c(2000, 2003))
 
 
 
 ## Visualize Gini Coefficient
 spatial_evenness %>% 
-  left_join(sig, by = c("WATER", "SP")) %>%
+  left_join(trends.gini, by = c("WATER", "SP")) %>%
   mutate(WATER = factor(WATER, levels = c("LML", "FBL"))) %>%
   ggplot(aes(x = as.numeric(Year), y = gini, col = SP)) + 
   geom_point(alpha = .2) +
@@ -169,7 +186,8 @@ spatial_evenness %>%
   scale_color_manual("Species", values = wes_palette("Darjeeling1",type = "c", n = 10), 
                      labels = labels) +
   scale_linetype_manual("Significance", values = c("dashed", "solid")) + 
-  guides(linetype = F)
+  guides(linetype = F) + 
+  geom_vline(data = removal.start, aes(xintercept = Year), lty = "dashed")
 
 
 ggsave(file = "Figures_Tables/Figure2_GeniCoefficient.jpeg", width = , height = 4, dpi = 600)
@@ -178,7 +196,7 @@ ggsave(file = "Figures_Tables/Figure2_GeniCoefficient.jpeg", width = , height = 
 
 
 
-
+### End -------------------------------------------------------------
 
 
 ## Cumulative abundances -------------

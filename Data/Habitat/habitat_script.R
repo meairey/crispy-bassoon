@@ -10,6 +10,7 @@ library(sf)
 library(geosphere)
 library(viridis)
 library(tidyverse)
+
 library(lwgeom)
 
 ### Functions ---------------------
@@ -47,8 +48,7 @@ reorder_points <- function(df) {
 ## Data loading
 
 ## Historical Habitat Classifications ----------------
-habs = read.csv("Data/habs.csv") %>% 
-  select(-X)
+habs = read.csv("Data/habs.csv")
 
 ## gps points from habitat features
 gps = read.csv("Data/CCA_data/garmin_lml_hab_day2.csv")
@@ -275,7 +275,7 @@ for(i in 1:length(site_lengths.FBL$ID1)){
 
 save(site_lengths.FBL, file = "Data/FBL_Site_Lengths.RData")
 
-## Creating little table for the CCA
+## Creating little table for the models
 env_updated_FBL = whole %>% 
   filter(water == "FBL") %>%
   left_join(site_lengths, by = c("site", "water"))  %>%
@@ -392,15 +392,35 @@ ggplot() +
     legend.position = "bottom",
     panel.grid.major = element_blank(),  # remove major grid lines
     panel.grid.minor = element_blank()) +
-  scale_x_discrete(position = "top", labels = c("C" = "Cobble", "B" = "Boulder", "BED" = "Bedrock", "EV" = "Emergent\nvegetation",
-                                                "SV" = "Submerged\nvegetation", "O" = "Organic\nmatter", "CW" = "Coarse woody\ndebris",
+  scale_x_discrete(position = "top", labels = c("C" = "Cobble",
+                                                "B" = "Boulder", 
+                                                "BED" = "Bedrock", 
+                                                "EV" = "Emergent\nvegetation",
+                                                "SV" = "Submerged\nvegetation", 
+                                                "O" = "Organic\nmatter",
+                                                "CW" = "Coarse woody\ndebris",
                                                 "FW" = "Fine\nwoody debris")) +
-   geom_text(data = (habs %>% filter(WATER == "FBL",
-                                     SITE_N != "BEF.FBL.001"))[1:14,], aes(y = SITE_N, x = "Old\nhabitat", label = Habitat), size = 3) +
-  geom_text(data = FBL_updated_sub, aes(y = SITE_N,  x = "New\nhabitat", label = new_hab),  size = 3) +
-  geom_text(data = FBL_updated_sub, aes(y = SITE_N, x = "Difference", label = same.new), size = 3)
+  # geom_text(data = (habs %>% filter(WATER == "FBL",
+   #                                  SITE_N != "BEF.FBL.001"))[1:14,],
+    #         aes(y = SITE_N, x = "Old\nhabitat",
+     #            label = Habitat), size = 3) +
+  geom_text(data = FBL_updated_sub %>%
+              ## Remove the below mutate if you want to see unconsolidated habitat types
+              mutate(new_hab = case_when(new_hab %in% c("S", "RS") ~ "LC", 
+                           new_hab %in% c("RSW", "SW") ~ "LCW", 
+                           new_hab == "RW" ~ "HCW", 
+                           new_hab == "R" ~ "HC")), 
+            aes(y = SITE_N, 
+                                        x = "Habitat\nCategory",
+                                        label = new_hab), 
+            size = 3)# +
+  #geom_text(data = FBL_updated_sub, 
+   #         aes(y = SITE_N, 
+    #            x = "Difference", 
+     #           label = same.new),
+      #      size = 3)
 
-ggsave(file = "Figures_Tables/FigureS2_FBL_habitat_table.jpeg", width = 8, height = 5, dpi = 600) 
+ggsave(file = "Figures_Tables/FigureS2_FBL_habitat_table.jpeg", width = 7, height = 5, dpi = 600) 
 
 
 ## ------------------ LML ------------------- 
@@ -648,17 +668,23 @@ ggplot() +
                                                 "SV" = "Submerged\nvegetation",
                                                "O" = "Organic\nmatter",
                                                "CW" = "Coarse woody\ndebris",
-                                                "FW" = "Fine\nwoody debris")) +
+                                                "FW" = "Fine\nwoody debris"))+
+  geom_text(data = updated_habs.LML%>%
+              filter(SITE_N != "BEF.LML.029") %>%
+               ## Remove the below mutate if you want to see unconsolidated habitat types
+              mutate(new_hab = case_when(new_hab %in% c("S", "RS") ~ "LC", 
+                           new_hab %in% c("RSW", "SW") ~ "LCW", 
+                           new_hab == "RW" ~ "HCW", 
+                           new_hab == "R" ~ "HC")), 
+            aes(y = SITE_N,  x = "Habitat\ncategory",
+                label = new_hab),  
+            size = 3) # +
+  
   
   geom_text(data = updated_habs.LML %>%
               filter(SITE_N != "BEF.LML.029"), 
             aes(y = SITE_N, x = "Old\nhabitat", 
                 label = old_hab), 
-            size = 3) +
-  geom_text(data = updated_habs.LML%>%
-              filter(SITE_N != "BEF.LML.029"),
-            aes(y = SITE_N,  x = "New\nhabitat",
-                label = new_hab),  
             size = 3) +
   
   geom_text(data = updated_habs.LML%>%
@@ -672,5 +698,5 @@ ggplot() +
                 label = same.new), 
             size = 3)
 
-ggsave(file = "Figures_Tables/FigureS2_LML_habitat_table.pdf", width = 8, height = 6, dpi = 600)
+ggsave(file = "Figures_Tables/FigureS2_LML_habitat_table.jpeg", width = 8, height = 6, dpi = 600)
 

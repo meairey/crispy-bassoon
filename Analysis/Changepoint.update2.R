@@ -35,20 +35,19 @@ cat = wes_palette("Zissou1", type ="discrete")
 ## Creating data for habitat assignments 
 
 #load(file = "Data/LML.v.post2000.RData")
-LML.habs = LML.v %>% select(Year, SITE, HAB_1) %>%
+LML.habs = LML.v %>% select(Year, SITE_N, HAB_1) %>%
   unique()
 
 ## Loading in new habitat assignments 
 updated_habs_LML=read.csv("Data/updated_habs_LML.csv") %>%
-    #separate(SITE_N, into =c("BEF", "LML", "SITE")) %>%
-  #mutate(SITE = as.character(as.numeric(SITE))) %>%
-  select( -same, -same.new, -Habitat)
+  select(SITE_N, new_hab)
+
 ## For little moose remove the woody designations
 LML.v2 = LML.v  %>% 
   mutate(Year = as.numeric(Year)) %>%
-  filter(Year > 1999) %>%
-      separate(ID, into = c("SITE", "Sp", "Age"), sep = "_",remove = F)  %>% 
-  left_join(updated_habs_LML, by = c("SITE" = "SITE_N"))%>%
+  filter(Year > 2000, 
+         SITE_N != "BEF.LML.001") %>%
+  left_join(updated_habs_LML)%>%
   mutate(HAB_1 = new_hab) %>%
   select(-new_hab) %>%
   ## Consolidated habitats - remove if you want to get rid of them
@@ -56,10 +55,9 @@ LML.v2 = LML.v  %>%
                            HAB_1 %in% c("RSW", "SW") ~ "SW", 
                            HAB_1 == "RW" ~ "RW", 
                            HAB_1 == "R" ~ "R"))
-  filter(SITE != "BEF.LML.001")
 
 
-LML.v2 %>% summarize(unique(HAB_1))
+LML.v2 %>% reframe(unique(HAB_1))
 LML.v2 %>% filter(HAB_1 == "RS")
 LML.v %>% summarize(unique(HAB_1))
 
@@ -100,14 +98,14 @@ for(i in 1:length(species)){
     # Set up data frame
     x = LML.v2 %>%
       filter(Year > 1999)  %>%
-      select(-Sp, -Age) %>%
+     # select(-Sp, -Age) %>%
       filter(Species == species[i], HAB_1 == h) %>%
       mutate(value = as.numeric(value)) %>%
       select(-Species, -HAB_1) %>%
       mutate(value =(value)) %>%
-      select(-ID) %>%
+     # select(-ID) %>%
       pivot_wider(values_from = value,
-                  names_from = SITE) %>%
+                  names_from = SITE_N) %>%
       replace(is.na(.), 0) %>%
       column_to_rownames(var = "Year") %>%
       as.matrix() %>% as.data.frame()
@@ -150,7 +148,7 @@ for(i in 1:length(species)){
     
 
     
-    M4 = try( zeroinfl(value_round ~ (Year + SITE) | 1 , ## set up as try so it doesn't break the loop
+    M4 = try( zeroinfl(value_round ~ (Year + SITE_N) | 1 , ## set up as try so it doesn't break the loop
                         dist = 'negbin',
                        data = po_v))
     
@@ -225,7 +223,7 @@ cp_lines.LML = read.csv("Data/CP_update_LML.csv") %>%
   group_by(SP, AGE, Habitat) %>%
   mutate(unique.sp = length(unique(CP))) %>%
   filter(unique.sp > 1, 
-         YEAR > 2000) %>%
+         YEAR > 2001) %>% ## you want to filter any CP out that are Y1 because that's just a weird artifact
   ungroup() %>% 
   group_by(YEAR, SP)  %>%
   mutate(stagger = (row_number() - 1) * 0.3,
@@ -245,7 +243,7 @@ cp_lines.LML = read.csv("Data/CP_update_LML.csv") %>%
   
 cp_lines.LML %>% 
   group_by(YEAR, SP) %>%
-  summarize(tot = length(unique(Habitat)))
+  summarize(tot = length(unique(HAB_1)))
 
 
 labels = c("CC" = "creek chub", "CS" = "common shiner","MM" =  "central mudminnow","PS" = "pumpkinseed","SMB" = "smallmouth bass", "WS" = "white sucker") 
@@ -313,19 +311,20 @@ species = colnames(FBL.CPUE.w.sec)[c(-3,-4, -9,-10) ]
 load("Data/ChangePoint_Data/FBL_v.RData")
 
 
-updated.fbl.habs = read.csv("Data/updated_habs_testing.FBL.csv")
+updated.fbl.habs = read.csv("Data/updated_habs_testing.FBL.csv") %>%
+  select(SITE_N, new_hab) %>% 
+  rename(HAB_1 = new_hab)
+
+
 FBL_v2 = FBL_v %>% 
   filter(Year > 2003) %>%
   left_join(updated.fbl.habs) %>% 
-  select(-HAB_1,  -Habitat, -same.new) %>% 
-  rename(HAB_1 = new_hab) %>%
   ## Testing consolidating the new habitats
   mutate(HAB_1 = case_when(HAB_1 %in% c("S", "RS") ~ "S", 
                            HAB_1 %in% c("RSW", "SW") ~ "SW", 
-                           HAB_1 == "RW" ~ "RW"))
+                           HAB_1 == "RW" ~ "RW")) %>%
+  filter(SITE_N != "BEF.FBL.001")
 
-
-### I think the 2003 sites have a different name but do correspond to the post 2003 sites? need to figure out if they can get assined modern equivalents
 
 change_points_list = list()
 
@@ -553,10 +552,11 @@ removal_starts = data.frame(WATER = factor(c("LML", "FBL"), levels = c("LML", "F
                                year.start = c(2000, 2003))
 
 FBL_v2 %>% 
-  separate(Species, into = c("Sp", "Age"), remove = F) %>%
-  rename(SITE = SITE_N) %>%
-  select(Year, ID, SITE, Sp, Age, Species, value, HAB_1, WATER) %>%
+ #  %>%
+  
+  select(Year, SITE_N, Species, value, HAB_1, WATER) %>%
   rbind(LML.v2 %>% mutate(WATER = "LML"))  %>%
+  separate(Species, into = c("Sp", "Age"), remove = F) %>%
   filter(Sp %in% c("CC","CS","PS","WS","SMB","MM")) %>%
   group_by(WATER, Year, HAB_1, Species, Sp, Age) %>%
   summarize(mean_CPUE = mean(value)) %>%
@@ -571,8 +571,8 @@ FBL_v2 %>%
   theme_minimal() +
   geom_area(position = "identity", alpha = .00001, size = 1)+ 
   guides(fill = guide_legend(override.aes = list(alpha = 1))) + 
-  facet_wrap(~WATER + Sp, scales = "free_y", labeller = labeller(Sp = labels, WATER = c("LML" = "Little Moose", "FBL" = "First Bisby"))) +
- 
+  facet_wrap(~WATER + Sp, scales = "free_y", labeller = labeller(Sp = labels, WATER = c("LML" = "Little Moose", "FBL" = "First Bisby")), 
+             ncol = 3) +
   theme(axis.text.x = element_text(angle= 90, vjust = .5),
         legend.position = "bottom", 
         legend.title = element_blank(), 
